@@ -40,19 +40,8 @@ class SimulationLogger:
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
-        for i in range(self.sim.num_ues):
-            # Lọc các cột cơ bản và các cột riêng biệt cho mỗi UE
-            ue_cols = ['Step'] + [col for col in df.columns if col.startswith(f'ue{i}_')]
-            df_ue = df[ue_cols].copy()
-            
-            # Xóa tiền tố ue{i}_ khỏi tên cột để file sạch sẽ hơn
-            rename_dict = {col: col.replace(f'ue{i}_', '') for col in ue_cols if col.startswith(f'ue{i}_')}
-            df_ue.rename(columns=rename_dict, inplace=True)
-            
-            # Tính tốc độ của UE hiện tại để cho vào tên file
-            velocity = df_ue['speed'].max() if 'speed' in df_ue.columns and not df_ue['speed'].isna().all() else 0
-            
-            filename = f"UE_{i}_{velocity:.2f}_kmh_{timestamp}.csv"
-            filepath = os.path.join("data", filename)
-            df_ue.to_csv(filepath, index=False, sep=',', decimal='.', encoding='utf-8-sig', float_format='%.2f')
-            print(f"Saved CSV for UE {i}: {filepath}")
+        filename = f"{self.sim.num_ues}_UE_Data_{timestamp}.csv"
+        filepath = os.path.join("data", filename)
+        
+        df.to_csv(filepath, index=False, sep=',', decimal='.', encoding='utf-8-sig', float_format='%.2f')
+        print(f"Saved single CSV for all {self.sim.num_ues} UEs: {filepath}")

@@ -15,6 +15,7 @@ import config
 from mobility import GridMobility
 from radio_models import RadioModel
 from logger import SimulationLogger
+from ue import AerialUE
 
 class CellularNetworkReceivedPower:
     def __init__(
@@ -27,6 +28,7 @@ class CellularNetworkReceivedPower:
         uav_radius_m: float = 750.0,
         uav_altitude_m: float = 100.0,
         uav_ptx_dbm: float = 40.0,
+        ue_height_m: float | None = None,
         fast_mode: bool = True,
         show_link_lines: bool = True,
         seed: int | None = None,
@@ -54,8 +56,9 @@ class CellularNetworkReceivedPower:
         self.x_lines = GridMobility._make_lines(self.rect_xmin, self.rect_xmax, self.grid_spacing_m)
         self.y_lines = GridMobility._make_lines(self.rect_ymin, self.rect_ymax, self.grid_spacing_m)
 
-        # UAV deployment (optional)
-        self.add_uav_cover = bool(add_uav_cover)
+        # Kept for backward-compatible constructor calls. UAV is modeled as a
+        # high-altitude UE; the simulator no longer deploys aerial BS nodes.
+        self.add_uav_cover = False
         self.uav_radius_m = float(uav_radius_m)
         self.uav_altitude_m = float(uav_altitude_m)
         self.uav_ptx_dbm = float(uav_ptx_dbm)
@@ -70,11 +73,12 @@ class CellularNetworkReceivedPower:
         self.max_candidate_bs = config.MAX_CANDIDATE_BS
 
         self.h_bs, self.h_ut = config.H_BS, config.H_UT
+        self.ue_height_m = self._validate_ue_height(ue_height_m)
 
-        # Ground BS: cố định NLOS
+        # Ground BS uses NLOS by default.
         self.ple_nlos = config.PLE_NLOS
 
-        # UAV BS: luôn LOS (giữ như bản gốc)
+        # Aerial radio params kept for UE-at-height formulas with ground BS.
         self.ple_uav_los = config.PLE_UAV_LOS
 
         # Shadow fading 
@@ -89,6 +93,11 @@ class CellularNetworkReceivedPower:
         self.ue_colors = ['green', 'purple', 'orange', 'cyan', 'magenta', 'yellow', 'black']
         self.ue_speeds = np.random.uniform(20.0, 60.0, self.num_ues)  # km/h
         self.ue_speeds_ms = self.ue_speeds * (1000.0 / 3600.0)
+        self.ue_heights_m = np.full(self.num_ues, self.ue_height_m, dtype=float)
+        self.aerial_ues = [
+            AerialUE(height_m=self.ue_height_m, speed_mps=float(self.ue_speeds_ms[i]))
+            for i in range(self.num_ues)
+        ] if self.is_aerial_ue else []
 
         self.steps = 100
         self.time_per_step = 3.0
@@ -120,8 +129,9 @@ class CellularNetworkReceivedPower:
 
         # UI + plot
         plt.ion()
-        self.fig = plt.figure(figsize=(10, 10))
-        self.ax = self.fig.add_axes([0.08, 0.1, 0.84, 0.82])
+        self.fig = plt.figure(figsize=(11.5, 10))
+        self.ax = self.fig.add_axes([0.06, 0.1, 0.72, 0.82])
+        self.height_ax = self.fig.add_axes([0.83, 0.18, 0.11, 0.64])
         self.toggle_ax = self.fig.add_axes([0.08, 0.02, 0.12, 0.05])
         self.restart_ax = self.fig.add_axes([0.22, 0.02, 0.14, 0.05])
         self.toggle_button = Button(self.toggle_ax, 'Stop', color='lightcoral')
@@ -135,6 +145,24 @@ class CellularNetworkReceivedPower:
 
         self.setup_plot()
         self.setup_ues()
+
+    @staticmethod
+    def _validate_ue_height(ue_height_m: float | None) -> float:
+        if ue_height_m is None:
+            return float(config.H_UT)
+
+        height = float(ue_height_m)
+        if height not in config.AERIAL_UE_HEIGHTS_M:
+            allowed = ", ".join(f"{h:g}" for h in config.AERIAL_UE_HEIGHTS_M)
+            raise ValueError(f"UE UAV height must be one of: {allowed} m")
+        return height
+
+    @property
+    def is_aerial_ue(self) -> bool:
+        return float(self.ue_height_m) in config.AERIAL_UE_HEIGHTS_M
+
+    def get_ue_height_m(self, ue_idx: int) -> float:
+        return float(self.ue_heights_m[ue_idx])
 
     def setup_plot(self):
         # Roads (grid)
@@ -164,7 +192,7 @@ class CellularNetworkReceivedPower:
             self.ax.plot(cx, cy, marker='^', color=bs_colors[idx % len(bs_colors)],
                          markersize=5, zorder=6)
 
-            # viền hex (đứt)
+            # Hex boundary.
             size = self.scale_factor
             angles = [60 * i for i in range(7)]
             xs = [cx + size * math.cos(math.radians(a)) for a in angles]
@@ -172,31 +200,6 @@ class CellularNetworkReceivedPower:
             self.ax.plot(xs, ys, color='black', linestyle='--', linewidth=1.0, alpha=0.6, zorder=2)
 
 
-        # --- UAV BS cover (optional): marker 'v' đỏ ---
-        if self.add_uav_cover:
-            R = float(self.uav_radius_m)
-            dx = math.sqrt(3.0) * R
-            dy = 1.5 * R
-            y = self.rect_ymin + R
-            row = 0
-            while y <= self.rect_ymax - R:
-                x = self.rect_xmin + R + (dx / 2.0 if (row % 2 == 1) else 0.0)
-                while x <= self.rect_xmax - R:
-                    self.bs_positions.append((x, y))
-                    self.bs_heights.append(float(self.uav_altitude_m))
-                    self.bs_ptx.append(float(self.uav_ptx_dbm))
-                    self.bs_is_uav.append(True)
-                    self.ax.plot(x, y, marker='v', color='tab:red', markersize=6, zorder=7)
-
-                    # Viền vùng phủ UAV (xanh nhạt, liền)
-                    size = self.scale_factor
-                    angles = [60 * i for i in range(7)]
-                    xs = [x + size * math.cos(math.radians(a)) for a in angles]
-                    ys = [y + size * math.sin(math.radians(a)) for a in angles]
-                    self.ax.plot(xs, ys, color='skyblue', linestyle='-', linewidth=1.2, alpha=0.9, zorder=2)
-                    x += dx
-                y += dy
-                row += 1
 
         # UE artists
         self.ue_points, self.ue_lines = [], []
@@ -221,19 +224,68 @@ class CellularNetworkReceivedPower:
             self.ax.set_box_aspect(1)
         self.ax.set_xlabel('Distance (m)')
         self.ax.set_ylabel('Distance (m)')
-        uav_tag = "+ UAV" if self.add_uav_cover else "Ground BS "
+        ue_tag = f"UE h={self.ue_height_m:g}m"
         self.ax.set_title(
-            f"{int(self.width)}m x{int(self.height)}m | {uav_tag} | {self.num_ues} UEs | Spacing: {int(self.grid_spacing_m)}m",
+            f"{int(self.width)}m x{int(self.height)}m | Ground BS | {self.num_ues} UEs | {ue_tag} | Spacing: {int(self.grid_spacing_m)}m",
             fontsize=10,
             pad=28
-        )   
+        )
+        self.setup_height_plot()
         plt.draw()
+
+    def setup_height_plot(self):
+        self.height_ax.clear()
+
+        ue_heights = [self.get_ue_height_m(i) for i in range(self.num_ues)]
+        max_height = max([self.h_bs, *ue_heights, 50.0])
+        y_max = max_height * 1.2
+        x_ues = np.arange(1, self.num_ues + 1)
+
+        self.height_ax.axhline(
+            self.h_bs,
+            color='tab:red',
+            linestyle='--',
+            linewidth=1.5,
+            label=f'Ground BS {self.h_bs:g} m'
+        )
+        self.height_ax.vlines(
+            x_ues,
+            0,
+            ue_heights,
+            colors=[self.ue_colors[i % len(self.ue_colors)] for i in range(self.num_ues)],
+            linewidth=2.0,
+            alpha=0.8
+        )
+        self.height_ax.scatter(
+            x_ues,
+            ue_heights,
+            c=[self.ue_colors[i % len(self.ue_colors)] for i in range(self.num_ues)],
+            s=36,
+            zorder=3,
+            label='UE height'
+        )
+
+        for x, height in zip(x_ues, ue_heights):
+            self.height_ax.text(x, height + y_max * 0.025, f'{height:g}', ha='center', va='bottom', fontsize=8)
+
+        self.height_ax.set_xlim(0.5, max(1.5, self.num_ues + 0.5))
+        self.height_ax.set_ylim(0, y_max)
+        self.height_ax.set_title('Height Profile', fontsize=10)
+        self.height_ax.set_ylabel('Height (m)')
+        self.height_ax.set_xlabel('UE')
+        self.height_ax.grid(axis='y', linestyle=':', linewidth=0.8, alpha=0.6)
+        self.height_ax.legend(loc='upper right', fontsize=8)
+
+        if self.num_ues <= 8:
+            self.height_ax.set_xticks(x_ues)
+            self.height_ax.set_xticklabels([f'UE{i}' for i in range(self.num_ues)], rotation=45, ha='right')
+        else:
+            self.height_ax.set_xticks([])
 
     def setup_ues(self):
         self.ue_positions.clear()
         self.ue_dir.clear()
 
-        # Spawn tại giao điểm ngẫu nhiên
         xs = self.x_lines
         ys = self.y_lines
         for _ in range(self.num_ues):
@@ -320,11 +372,15 @@ class CellularNetworkReceivedPower:
                 self.ue_lines[ue_idx].set_data([], [])
 
             if bs is not None:
-                pl_base, los = self.radio_model.calculate_path_loss_idx(x, y, bs)
+                pl_base, los = self.radio_model.calculate_path_loss_idx(x, y, bs, ue_idx)
+                los_probability = self.radio_model.get_los_probability_idx(x, y, bs, ue_idx)
+                los_state = 'LOS' if los else 'NLOS'
                 sf_db = self.radio_model.shadow_fading(ue_idx, bs, los, (x, y))
                 prx_inst = self.radio_model.calculate_received_power_idx(bs, pl_base + sf_db)
                 sinr = self.radio_model.calculate_sinr(ue_idx, bs, prx_inst)
             else:
+                los_probability = None
+                los_state = None
                 prx_inst = None
                 sinr = None
 
@@ -332,7 +388,11 @@ class CellularNetworkReceivedPower:
             handover_flag = 1 if (prev_bs is not None and bs is not None and bs != prev_bs) else 0
             self.previous_serving_bs[ue_idx] = bs
 
-            self.logger.log_ue_data(ue_idx, x, y, bs, prx_inst, sinr, handover_flag, neighbors)
+            self.logger.log_ue_data(
+                ue_idx, x, y, bs, prx_inst, sinr, handover_flag, neighbors,
+                los_probability=los_probability,
+                los_state=los_state
+            )
 
         self.time_text.set_text(f'Step: {frame}')
         self.fig.canvas.draw()

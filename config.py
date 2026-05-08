@@ -16,7 +16,8 @@ MAX_BS_RANGE = 600.0
 MAX_CANDIDATE_BS = 6
 
 H_BS = 25.0     # Height of BS_ground (m)
-H_UT = 1.5      # Height of UE (m)
+H_UT = 1.5      # Height of UE_ground (m)
+AERIAL_UE_HEIGHTS_M = (50.0, 100.0, 200.0, 300.0)       # Allowed heights for aerial UEs (m)
 
 # Path Loss Exponents
 PLE_NLOS = 4.1

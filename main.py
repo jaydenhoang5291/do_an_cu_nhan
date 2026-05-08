@@ -5,30 +5,29 @@ simulation, and displays the animation window.
 
 import matplotlib.pyplot as plt
 
+import config
 from simulation import CellularNetworkReceivedPower
 from utils import _read_float, _read_int
 
 if __name__ == "__main__":
     L = _read_float("Enter RECTANGLE LENGTH (m): ", 8000.0)
     W = _read_float("Enter RECTANGLE WIDTH (m): ", 5000.0)
-    num_ues = _read_int("Enter number of UEs: ", 5)
     grid_sp = _read_float("Enter road grid spacing (m, default 200): ", 200.0)
+    num_ues = _read_int("Enter number of UEs: ", 5)
 
-    add_uav = input("Add UAV-BS coverage? (y/N): ").strip().lower().startswith('y')
-    uav_R = _read_float("UAV radius (m, default 750): ", 750.0) if add_uav else 750.0
-    uav_h = _read_float("UAV altitude (m, default 100): ", 100.0) if add_uav else 100.0
-    uav_ptx = _read_float("UAV transmit power Ptx (dBm, default 40): ", 40.0) if add_uav else 40.0
+    use_aerial_ue = input("Use aerial UE height? (y/N): ").strip().lower().startswith('y')
+    ue_height = None
+    if use_aerial_ue:
+        allowed = "/".join(f"{h:g}" for h in config.AERIAL_UE_HEIGHTS_M)
+        ue_height = _read_float(f"Aerial UE height ({allowed} m, default 100): ", 100.0)
 
     show_lines = input("Show UE - BS connection lines? (y/N): ").strip().lower().startswith('y')
     sim = CellularNetworkReceivedPower(
         num_ues=num_ues,
         rect_len_m=L,
         rect_wid_m=W,
-         grid_spacing_m=grid_sp,
-        add_uav_cover=add_uav,
-        uav_radius_m=uav_R,
-        uav_altitude_m=uav_h,
-        uav_ptx_dbm=uav_ptx,
+        grid_spacing_m=grid_sp,
+        ue_height_m=ue_height,
         show_link_lines=show_lines,
         fast_mode=True
     )

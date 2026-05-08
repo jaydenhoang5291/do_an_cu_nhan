@@ -1,3 +1,8 @@
+"""
+Coordinates the full simulation: initializes the simulation area, draws the
+Matplotlib UI, updates UE positions, manages BS connections, and runs animation.
+"""
+
 import math
 import numpy as np
 import matplotlib.pyplot as plt
@@ -203,15 +208,25 @@ class CellularNetworkReceivedPower:
                               alpha=(0.6 if self.show_link_lines else 0.0), zorder=6)
             self.ue_lines.append(l)
 
-        self.time_text = self.ax.text(self.rect_xmin + 20, self.rect_ymax + 20, '', fontsize=10, zorder=8)
+        # Keep the step label outside the simulation frame, just below the title.
+        self.time_text = self.ax.text(
+            0.5, 1.015, '', transform=self.ax.transAxes,
+            ha='center', va='bottom', fontsize=11, zorder=8, clip_on=False
+        )
 
         self.ax.set_xlim(0, self.total_size)
         self.ax.set_ylim(0, self.total_size)
-        self.ax.set_xlabel('Khoảng cách (m)')
-        self.ax.set_ylabel('Khoảng cách (m)')
+        self.ax.set_aspect('equal', adjustable='box')
+        if hasattr(self.ax, 'set_box_aspect'):
+            self.ax.set_box_aspect(1)
+        self.ax.set_xlabel('Distance (m)')
+        self.ax.set_ylabel('Distance (m)')
+        uav_tag = "+ UAV" if self.add_uav_cover else "Ground BS "
         self.ax.set_title(
-            f'Grid road (Manhattan) | Ground=NLOS, UAV=LOS | {int(self.width)}x{int(self.height)} m | grid_spacing={int(self.grid_spacing_m)} m'
-        )
+            f"{int(self.width)}m x{int(self.height)}m | {uav_tag} | {self.num_ues} UEs | Spacing: {int(self.grid_spacing_m)}m",
+            fontsize=10,
+            pad=28
+        )   
         plt.draw()
 
     def setup_ues(self):
@@ -239,7 +254,7 @@ class CellularNetworkReceivedPower:
 
     def restart_animation(self, event):
         self.animation_running = True
-        self.current_frame = 0
+        self.current_frame = -1
         self.ue_serving_bs = [None] * self.num_ues
         self.previous_serving_bs = [None] * self.num_ues
 
@@ -296,7 +311,7 @@ class CellularNetworkReceivedPower:
             x, y = self.ue_positions[ue_idx]
             self.ue_points[ue_idx].set_data([x], [y])
 
-            bs, prx_avg, dist = self.radio_model.get_serving_bs(x, y, ue_idx)
+            bs, prx_avg, dist, neighbors = self.radio_model.get_serving_bs(x, y, ue_idx)
 
             if bs is not None and self.show_link_lines:
                 self.ue_lines[ue_idx].set_data([x, self.bs_positions[bs][0]],
@@ -317,7 +332,7 @@ class CellularNetworkReceivedPower:
             handover_flag = 1 if (prev_bs is not None and bs is not None and bs != prev_bs) else 0
             self.previous_serving_bs[ue_idx] = bs
 
-            self.logger.log_ue_data(ue_idx, x, y, bs, prx_inst, sinr, handover_flag)
+            self.logger.log_ue_data(ue_idx, x, y, bs, prx_inst, sinr, handover_flag, neighbors)
 
         self.time_text.set_text(f'Step: {frame}')
         self.fig.canvas.draw()
@@ -325,12 +340,20 @@ class CellularNetworkReceivedPower:
 
     def run_animation(self):
         self.animation_running = True
-        for frame in range(0, self.steps + 1):
+        start_frame = getattr(self, 'current_frame', -1) + 1
+        
+        # Avoid running if we already completed all steps
+        if start_frame > self.steps:
+            return
+
+        for frame in range(start_frame, self.steps + 1):
             if not self.animation_running:
                 break
             self.update(frame)
             plt.pause(self.pause_s)
-        try:
-            self.logger.save_data_to_csv()
-        except Exception as e:
-            print('CSV save failed:', e)
+            
+        if self.animation_running and getattr(self, 'current_frame', -1) == self.steps:
+            try:
+                self.logger.save_data_to_csv()
+            except Exception as e:
+                print('CSV save failed:', e)

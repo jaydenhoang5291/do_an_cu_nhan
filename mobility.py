@@ -1,3 +1,8 @@
+"""
+Handles UE mobility on a Manhattan road grid: creates road lines, selects
+valid movement directions, and updates positions at each simulation step.
+"""
+
 import numpy as np
 from utils import _read_float, _read_int
 

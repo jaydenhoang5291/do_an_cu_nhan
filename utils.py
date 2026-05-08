@@ -1,3 +1,8 @@
+"""
+Contains small shared utility functions, currently for reading numeric input
+with defaults when the user leaves input blank or enters invalid values.
+"""
+
 import math
 from dataclasses import dataclass
 

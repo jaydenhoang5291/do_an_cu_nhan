@@ -1,3 +1,8 @@
+"""
+Builds and converts the hexagonal grid used to place base stations in the
+simulation area.
+"""
+
 import math
 from dataclasses import dataclass
 

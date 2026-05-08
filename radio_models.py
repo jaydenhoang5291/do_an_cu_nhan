@@ -1,3 +1,8 @@
+"""
+Implements radio calculations: UE-BS distance, path loss, shadow fading,
+received power, SINR, and serving BS selection.
+"""
+
 import numpy as np
 import config
 
@@ -60,25 +65,36 @@ class RadioModel:
         return ptx + self.sim.gtx + self.sim.grx - float(path_loss_db)
 
     def get_serving_bs(self, ue_x, ue_y, ue_idx):
+        neighbor_count = 5
+        candidate_target = max(neighbor_count + 1, int(self.sim.max_candidate_bs))
+        dist_list_all = []
         dist_list = []
         for i, (bs_x, bs_y) in enumerate(self.sim.bs_positions):
+            d3 = self.calculate_distance_idx(ue_x, ue_y, i)
+            dist_list_all.append((i, d3))
             if self.sim.max_bs_range is not None:
                 d2 = float(np.hypot(ue_x - bs_x, ue_y - bs_y))
                 if d2 > self.sim.max_bs_range:
                     continue
-            d3 = self.calculate_distance_idx(ue_x, ue_y, i)
             dist_list.append((i, d3))
 
         if not dist_list:
-            for i in range(len(self.sim.bs_positions)):
-                d3 = self.calculate_distance_idx(ue_x, ue_y, i)
-                dist_list.append((i, d3))
+            dist_list = list(dist_list_all)
             if not dist_list:
                 self.sim.ue_serving_bs[ue_idx] = None
-                return None, None, None
+                return None, None, None, []
 
+        dist_list_all.sort(key=lambda x: x[1])
         dist_list.sort(key=lambda x: x[1])
-        candidate_indices = [i for i, _ in dist_list[:max(1, int(self.sim.max_candidate_bs))]]
+        candidate_indices = [i for i, _ in dist_list[:max(1, candidate_target)]]
+
+        # Fill short in-range candidate lists with nearest out-of-range BSs so
+        # the CSV can still report the top 5 non-serving BSs when available.
+        for i, _ in dist_list_all:
+            if len(candidate_indices) >= max(1, candidate_target):
+                break
+            if i not in candidate_indices:
+                candidate_indices.append(i)
 
         current_bs = self.sim.ue_serving_bs[ue_idx]
         if current_bs is not None and current_bs not in candidate_indices:
@@ -95,19 +111,24 @@ class RadioModel:
 
         if not cand:
             self.sim.ue_serving_bs[ue_idx] = None
-            return None, None, None
+            return None, None, None, []
 
         cand.sort(key=lambda x: x[1], reverse=True)
+        
+        def get_neighbors(final_bs):
+            neighbors = [(x[0], x[1]) for x in cand if x[0] != final_bs]
+            return neighbors[:neighbor_count]
+
         if current_bs is None:
             best_bs, best_prx, best_d = cand[0]
             self.sim.ue_serving_bs[ue_idx] = best_bs
-            return best_bs, best_prx, best_d
+            return best_bs, best_prx, best_d, get_neighbors(best_bs)
 
         cur = next((t for t in cand if t[0] == current_bs), None)
         if cur is None:
             best_bs, best_prx, best_d = cand[0]
             self.sim.ue_serving_bs[ue_idx] = best_bs
-            return best_bs, best_prx, best_d
+            return best_bs, best_prx, best_d, get_neighbors(best_bs)
 
         cur_prx, cur_d = float(cur[1]), float(cur[2])
         for bs_idx, bs_prx, bs_d in cand:
@@ -115,9 +136,9 @@ class RadioModel:
                 continue
             if float(bs_prx) > cur_prx + float(self.sim.hom):
                 self.sim.ue_serving_bs[ue_idx] = bs_idx
-                return bs_idx, float(bs_prx), float(bs_d)
+                return bs_idx, float(bs_prx), float(bs_d), get_neighbors(bs_idx)
 
-        return current_bs, cur_prx, cur_d
+        return current_bs, cur_prx, cur_d, get_neighbors(current_bs)
 
     def calculate_sinr(self, ue_idx, serving_bs_idx, prx_dbm):
         N_mw = 10 ** (config.N_DBM / 10.0)

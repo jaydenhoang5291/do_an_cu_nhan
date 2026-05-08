@@ -1,3 +1,8 @@
+"""
+Logs simulation data for each step and UE, then exports the collected results
+to a CSV file in the data directory.
+"""
+
 import os
 import pandas as pd
 from datetime import datetime
@@ -9,13 +14,16 @@ class SimulationLogger:
     def setup_log(self):
         self.sim.data_log = {'Step': []}
         for i in range(self.sim.num_ues):
-            for key in ['x', 'y', 'direction', 'connected_bs', 'current_prx', 'sinr', 'speed', 'handover']:
+            keys = ['x', 'y', 'direction', 'connected_bs', 'current_prx', 'sinr', 'speed', 'handover']
+            for j in range(5):
+                keys.extend([f'bs{j + 1}_idx', f'bs{j + 1}_prx'])
+            for key in keys:
                 self.sim.data_log[f'ue{i}_{key}'] = []
 
     def log_step(self, frame):
         self.sim.data_log['Step'].append(frame)
 
-    def log_ue_data(self, ue_idx, x, y, bs, prx_inst, sinr, handover_flag):
+    def log_ue_data(self, ue_idx, x, y, bs, prx_inst, sinr, handover_flag, neighbors=None):
         self.sim.data_log[f'ue{ue_idx}_x'].append(x)
         self.sim.data_log[f'ue{ue_idx}_y'].append(y)
         self.sim.data_log[f'ue{ue_idx}_direction'].append(int(self.sim.ue_dir[ue_idx]))
@@ -24,6 +32,18 @@ class SimulationLogger:
         self.sim.data_log[f'ue{ue_idx}_sinr'].append(sinr)
         self.sim.data_log[f'ue{ue_idx}_speed'].append(float(self.sim.ue_speeds[ue_idx] * self.sim.ue_speed_factor[ue_idx]))
         self.sim.data_log[f'ue{ue_idx}_handover'].append(handover_flag)
+        
+        if neighbors is None:
+            neighbors = []
+        for j in range(5):
+            idx_key = f'ue{ue_idx}_bs{j+1}_idx'
+            prx_key = f'ue{ue_idx}_bs{j+1}_prx'
+            if j < len(neighbors):
+                self.sim.data_log[idx_key].append(neighbors[j][0])
+                self.sim.data_log[prx_key].append(neighbors[j][1])
+            else:
+                self.sim.data_log[idx_key].append(None)
+                self.sim.data_log[prx_key].append(None)
 
     def save_data_to_csv(self):
         os.makedirs("data", exist_ok=True)

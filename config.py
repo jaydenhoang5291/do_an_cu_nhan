@@ -1,5 +1,6 @@
 """
-Global Configuration variables for Cellular Network Simulation
+Defines global configuration constants for the cellular network simulation,
+including radio parameters, handover, stop-and-go mobility, and noise.
 """
 
 # Radio Params
@@ -29,6 +30,10 @@ SF_SIGMA_UAV = 14.0
 TURNS_BEFORE_STOP = 3
 STOP_DURATION_STEPS = 9
 RAMP_DURATION_STEPS = 2
+
+# Output sampling
+SIMULATION_STEPS = 300
+TIME_PER_STEP_S = 1.0
 
 # Noise power
 N_DBM = -100.0

@@ -1,3 +1,8 @@
+"""
+Main entry point: reads user input, initializes the cellular network
+simulation, and displays the animation window.
+"""
+
 import matplotlib.pyplot as plt
 
 from simulation import CellularNetworkReceivedPower

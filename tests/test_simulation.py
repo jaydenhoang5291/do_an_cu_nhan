@@ -36,7 +36,7 @@ class SimulationBSTests(unittest.TestCase):
         )
 
         ue_x, ue_y = sim.ue_positions[0]
-        los_probability = sim.radio_model.get_los_probability_idx(ue_x, ue_y, 0, 0)
+        _, _, los_probability = sim.radio_model.calculate_path_loss(ue_x, ue_y, 0, 0)
 
         self.assertFalse(sim.bs_is_uav[0])
         self.assertGreaterEqual(los_probability, 0.0)
@@ -86,8 +86,7 @@ class SimulationBSTests(unittest.TestCase):
         )
 
         ue_x, ue_y = sim.ue_positions[0]
-        p_los = sim.radio_model.get_los_probability_idx(ue_x, ue_y, 0, 0)
-        los = sim.radio_model.sample_los_state_idx(ue_x, ue_y, 0, 0)
+        _, los, p_los = sim.radio_model.calculate_path_loss(ue_x, ue_y, 0, 0)
 
         self.assertEqual(los, p_los >= 0.5)
 
@@ -103,8 +102,9 @@ class SimulationBSTests(unittest.TestCase):
         )
 
         ue_x, ue_y = sim.ue_positions[0]
+        _, los, _ = sim.radio_model.calculate_path_loss(ue_x, ue_y, 0, 0)
 
-        self.assertTrue(sim.radio_model.sample_los_state_idx(ue_x, ue_y, 0, 0))
+        self.assertTrue(los)
 
 
 if __name__ == "__main__":

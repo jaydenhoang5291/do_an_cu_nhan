@@ -6,6 +6,124 @@ received power, SINR, and serving BS selection.
 import numpy as np
 import config
 
+
+def uma_av_los_probability(d2D: float, h_UT: float) -> float:
+    d2D = max(float(d2D), 0.0)
+    h_UT = float(h_UT)
+
+    if not (1.5 <= h_UT <= 300.0):
+        raise ValueError(
+            "UMa/UMa-AV LOS probability is defined for "
+            "1.5 m <= h_UT <= 300 m"
+        )
+
+    # TR 38.901 UMa: 1.5 <= h_UT <= 22.5.
+    if h_UT <= 22.5:
+        if d2D <= 18.0:
+            return 1.0
+
+        c_hut = 0.0
+
+        # d2D > 18.0
+        if h_UT > 13.0:
+            c_hut = ((h_UT - 13.0) / 10.0) ** 1.5
+
+        base = (18.0 / d2D) + (1.0 - 18.0 / d2D) * np.exp(-d2D / 63.0)
+        height_gain = 1.0 + (5.0 / 4.0) * c_hut * ((d2D / 100.0) ** 3) * np.exp(-d2D / 150.0)
+        return float(np.clip(base * height_gain, 0.0, 1.0))
+
+    # TR 36.777 UMa-AV: 100 < h_UT <= 300.
+    if h_UT > 100.0:
+        return 1.0
+
+    # TR 36.777 UMa-AV: 22.5 < h_UT <= 100.
+    d1 = max(460.0 * np.log10(h_UT) - 700.0, 18.0)
+    p1 = 4300.0 * np.log10(h_UT) - 3800.0
+
+    if d2D <= d1:
+        return 1.0
+
+    p_los = (d1 / d2D) + np.exp(-d2D / p1) * (1.0 - d1 / d2D)
+    return float(np.clip(p_los, 0.0, 1.0))
+
+#########################################################################################
+# CALCULATE PATH LOSS OF UMa/UMa-AV LOS/NLOS
+#########################################################################################
+
+# Calculate the breakpoint distance
+def effective_breakpoint_distance(fc_ghz: float, h_BS: float, h_UT: float) -> float:
+    fc_hz = float(fc_ghz) * 1e9
+    h_E = 1.0
+    h_BS_effective = float(h_BS) - h_E
+    h_UT_effective = float(h_UT) - h_E
+    return 4.0 * h_BS_effective * h_UT_effective * fc_hz / 3e8
+
+# UMa LOS path loss based on TR 38.901 Table 7.4.1-1
+def uma_los_path_loss(d2D: float, d3D: float, fc_ghz: float, h_BS: float = 25.0, h_UT: float = 1.5) -> float:
+    d2D = max(float(d2D), 1.0)
+    d3D = max(float(d3D), 1.0)
+    fc_ghz = float(fc_ghz)
+    d_BP_effective = effective_breakpoint_distance(fc_ghz, h_BS, h_UT)
+
+    if d2D <= d_BP_effective:
+        # TR 38.901 Table 7.4.1-1, UMa LOS, referenced by TR 36.777
+        pl = 28.0 + 22.0 * np.log10(d3D) + 20.0 * np.log10(fc_ghz)
+    else:
+        # TR 38.901 Table 7.4.1-1, UMa LOS/NLOS, referenced by TR 36.777
+        pl = (
+            28.0
+            + 40.0 * np.log10(d3D)
+            + 20.0 * np.log10(fc_ghz)
+            - 9.0 * np.log10(d_BP_effective ** 2 + (float(h_BS) - float(h_UT)) ** 2)
+        )
+    return float(pl)
+
+# UMa NLOS path loss based on TR 38.901 Table 7.4.1-1
+def uma_nlos_path_loss(d2D: float, d3D: float, fc_ghz: float, h_BS: float = 25.0, h_UT: float = 1.5) -> float:
+    d3D = max(float(d3D), 1.0)
+    h_UT = float(h_UT)
+    los_pl = uma_los_path_loss(d2D, d3D, fc_ghz, h_BS, h_UT)
+    # TR 38.901 Table 7.4.1-1, UMa LOS/NLOS, referenced by TR 36.777
+    nlos_pl = (
+        13.54
+        + 39.08 * np.log10(d3D)
+        + 20.0 * np.log10(float(fc_ghz))
+        - 0.6 * (h_UT - 1.5)
+    )
+    return float(max(los_pl, nlos_pl))
+
+# UMa-AV LOS path loss based on TR 36.777 Annex B Table B-2
+def uma_av_los_path_loss(d2D: float, d3D: float, fc_ghz: float, h_BS: float = 25.0, h_UT: float = 1.5) -> float:
+    h_UT = float(h_UT)
+    if 1.5 <= h_UT <= 22.5:
+        return uma_los_path_loss(d2D, d3D, fc_ghz, h_BS, h_UT)
+    if (22.5 < h_UT <= 300.0) and (d2D <= 4.0 * 1e3):
+        d3D = max(float(d3D), 1.0)
+        # TR 36.777 Annex B Table B-2, UMa-AV LOS
+        pl = 28.0 + 22.0 * np.log10(d3D) + 20.0 * np.log10(float(fc_ghz))
+        return float(pl)
+    raise ValueError("UMa-AV LOS pathloss is defined for 1.5 m <= hUT <= 300 m")
+
+# UMa-AV NLOS path loss based on TR 36.777 Annex B Table B-2
+def uma_av_nlos_path_loss(d2D: float, d3D: float, fc_ghz: float, h_BS: float = 25.0, h_UT: float = 1.5) -> float:
+    h_UT = float(h_UT)
+    if 1.5 <= h_UT <= 22.5:
+        return uma_nlos_path_loss(d2D, d3D, fc_ghz, h_BS, h_UT)
+    if 22.5 < h_UT <= 100.0:
+        d3D = max(float(d3D), 1.0)
+        # TR 36.777 Annex B Table B-2, UMa-AV NLOS
+        pl = (
+            -17.5
+            + (46.0 - 7.0 * np.log10(h_UT)) * np.log10(d3D)
+            + 20.0 * np.log10(40.0 * np.pi * float(fc_ghz) / 3.0)
+        )
+        return float(pl)
+    raise ValueError("UMa-AV NLOS pathloss is defined for 1.5 m <= hUT <= 100 m")
+
+##########################################################################################
+# Main RadioModel class that uses the above functions to calculate path loss, shadow fading,
+# received power, SINR, and serving BS selection.
+##########################################################################################
 class RadioModel:
     def __init__(self, sim):
         self.sim = sim
@@ -15,75 +133,26 @@ class RadioModel:
             return True
         return ue_idx is not None and self.sim.is_aerial_ue
 
-    @staticmethod
-    # UMa LOS probability from TR 38.901 and UMa-AV extension from TR 36.777.
-    def uma_av_los_probability(d2D: float, h_UT: float) -> float:
-        d2D = max(float(d2D), 0.0)
-        h_UT = float(h_UT)
-
-        if not (1.5 <= h_UT <= 300.0):
-            raise ValueError(
-                "UMa/UMa-AV LOS probability is defined for "
-                "1.5 m <= h_UT <= 300 m"
-            )
-
-        # TR 38.901 UMa: 1.5 <= h_UT <= 22.5.
-        if h_UT <= 22.5:
-            if d2D <= 18.0:
-                return 1.0
-
-            c_hut = 0.0
-
-            # d2D > 18.0
-            if h_UT > 13.0:
-                c_hut = ((h_UT - 13.0) / 10.0) ** 1.5
-
-            base = (18.0 / d2D) + (1.0 - 18.0 / d2D) * np.exp(-d2D / 63.0)
-            height_gain = 1.0 + (5.0 / 4.0) * c_hut * ((d2D / 100.0) ** 3) * np.exp(-d2D / 150.0)
-            return float(np.clip(base * height_gain, 0.0, 1.0))
-
-        # TR 36.777 UMa-AV: 100 < h_UT <= 300.
-        if h_UT > 100.0:
-            return 1.0
-
-        # TR 36.777 UMa-AV: 22.5 < h_UT <= 100.
-        d1 = max(460.0 * np.log10(h_UT) - 700.0, 18.0)
-        p1 = 4300.0 * np.log10(h_UT) - 3800.0
-
-        if d2D <= d1:
-            return 1.0
-
-        p_los = (d1 / d2D) + np.exp(-d2D / p1) * (1.0 - d1 / d2D)
-        return float(np.clip(p_los, 0.0, 1.0))
-
-    def get_los_probability_idx(self, ue_x, ue_y, bs_idx: int, ue_idx: int | None = None) -> float:
-        d2D, _ = self.calculate_distances_idx(ue_x, ue_y, bs_idx, ue_idx)
-        h_UT = self.sim.get_ue_height_m(ue_idx) if ue_idx is not None else self.sim.h_ut
-        return self.uma_av_los_probability(d2D, h_UT)
-
-    def sample_los_state_idx(self, ue_x, ue_y, bs_idx: int, ue_idx: int | None = None) -> bool:
-        p_los = self.get_los_probability_idx(ue_x, ue_y, bs_idx, ue_idx)
-        return p_los >= 0.5
-
-    def calculate_distances_idx(self, ue_x, ue_y, bs_idx: int, ue_idx: int | None = None):
+    # Calculate 2D and 3D distances between UE and BS, ensuring minimum 3D distance of 1m to avoid singularities
+    def calculate_distances(self, ue_x, ue_y, bs_idx: int, ue_idx: int | None = None):
         bs_x, bs_y = self.sim.bs_positions[bs_idx]
         d2D = float(np.hypot(ue_x - bs_x, ue_y - bs_y))
-        h_UT = self.sim.get_ue_height_m(ue_idx) if ue_idx is not None else self.sim.h_ut
+        h_UT = self.sim.get_ue_height_m(ue_idx) if ue_idx is not None else self.sim.h_UT
         bs_height = float(self.sim.bs_heights[bs_idx])
         delta_height = bs_height - h_UT
         d3D = max(float(np.hypot(d2D, delta_height)), 1.0)
         return d2D, d3D
 
-    def calculate_path_loss_idx(self, ue_x, ue_y, bs_idx: int, ue_idx: int | None = None):
-        _, d3D = self.calculate_distances_idx(ue_x, ue_y, bs_idx, ue_idx)
-        fspl_1m = 32.4 + 20.0 * np.log10(self.sim.fc)
-        los = self.sample_los_state_idx(ue_x, ue_y, bs_idx, ue_idx)
+    def calculate_path_loss(self, ue_x, ue_y, bs_idx: int, ue_idx: int | None = None):
+        d2D, d3D = self.calculate_distances(ue_x, ue_y, bs_idx, ue_idx)
+        h_UT = self.sim.get_ue_height_m(ue_idx) if ue_idx is not None else self.sim.h_UT
+        p_los = uma_av_los_probability(d2D, h_UT)
+        los = p_los >= 0.5
         if los:
-            n = self.sim.ple_uav_los
+            pl = uma_av_los_path_loss(d2D, d3D, self.sim.fc, self.sim.h_BS, h_UT)
         else:
-            n = self.sim.ple_nlos
-        pl = fspl_1m + 10.0 * n * np.log10(d3D)
-        return float(pl), los
+            pl = uma_av_nlos_path_loss(d2D, d3D, self.sim.fc, self.sim.h_BS, h_UT)
+        return float(pl), los, float(p_los)
 
     def shadow_fading(self, ue_idx, bs_idx, los, ue_pos):
         if self.is_aerial_link(ue_idx, bs_idx):
@@ -117,7 +186,8 @@ class RadioModel:
         self.sim.sf_cache[key] = {'x': ue_pos[0], 'y': ue_pos[1], 'val': newval, 'los': bool(los)}
         return newval
 
-    def calculate_received_power_idx(self, bs_idx: int, path_loss_db: float):
+# Friss equation to calculate received power in dBm based on transmit power, gains, and path loss
+    def calculate_received_power(self, bs_idx: int, path_loss_db: float):
         ptx = float(self.sim.bs_ptx[bs_idx])
         return ptx + self.sim.gtx + self.sim.grx - float(path_loss_db)
 
@@ -127,7 +197,7 @@ class RadioModel:
         dist_list_all = []
         dist_list = []
         for i, _ in enumerate(self.sim.bs_positions):
-            d2D, d3D = self.calculate_distances_idx(ue_x, ue_y, i, ue_idx)
+            d2D, d3D = self.calculate_distances(ue_x, ue_y, i, ue_idx)
             dist_list_all.append((i, d3D))
             if self.sim.max_bs_range is not None:
                 if d2D > self.sim.max_bs_range:
@@ -158,11 +228,11 @@ class RadioModel:
 
         cand = []
         for i in candidate_indices:
-            pl_base, los_i = self.calculate_path_loss_idx(ue_x, ue_y, i, ue_idx)
+            pl_base, los_i, _ = self.calculate_path_loss(ue_x, ue_y, i, ue_idx)
             sf_db = self.shadow_fading(ue_idx, i, los_i, (ue_x, ue_y))
             pl = pl_base + sf_db
-            prx = self.calculate_received_power_idx(i, pl)
-            _, d3D = self.calculate_distances_idx(ue_x, ue_y, i, ue_idx)
+            prx = self.calculate_received_power(i, pl)
+            _, d3D = self.calculate_distances(ue_x, ue_y, i, ue_idx)
             cand.append((i, float(prx), float(d3D)))
 
         if not cand:
@@ -203,9 +273,9 @@ class RadioModel:
         for i, (bs_x, bs_y) in enumerate(self.sim.bs_positions):
             if i == serving_bs_idx:
                 continue
-            pl, los_i = self.calculate_path_loss_idx(ue_x, ue_y, i, ue_idx)
+            pl, los_i, _ = self.calculate_path_loss(ue_x, ue_y, i, ue_idx)
             sf_i = self.shadow_fading(ue_idx, i, los_i, (ue_x, ue_y))
-            prx_i = self.calculate_received_power_idx(i, pl + sf_i)
+            prx_i = self.calculate_received_power(i, pl + sf_i)
             if prx_i >= self.sim.sensitivity:
                 interf += 10 ** (prx_i / 10.0)
         prx_mw = 10 ** (prx_dbm / 10.0)

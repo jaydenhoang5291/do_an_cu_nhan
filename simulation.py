@@ -372,11 +372,10 @@ class CellularNetworkReceivedPower:
                 self.ue_lines[ue_idx].set_data([], [])
 
             if bs is not None:
-                pl_base, los = self.radio_model.calculate_path_loss_idx(x, y, bs, ue_idx)
-                los_probability = self.radio_model.get_los_probability_idx(x, y, bs, ue_idx)
+                pl_base, los, los_probability = self.radio_model.calculate_path_loss(x, y, bs, ue_idx)
                 los_state = 'LOS' if los else 'NLOS'
                 sf_db = self.radio_model.shadow_fading(ue_idx, bs, los, (x, y))
-                prx_inst = self.radio_model.calculate_received_power_idx(bs, pl_base + sf_db)
+                prx_inst = self.radio_model.calculate_received_power(bs, pl_base + sf_db)
                 sinr = self.radio_model.calculate_sinr(ue_idx, bs, prx_inst)
             else:
                 los_probability = None

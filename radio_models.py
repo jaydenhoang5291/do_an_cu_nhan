@@ -51,21 +51,21 @@ def uma_av_los_probability(d2D: float, h_UT: float) -> float:
 #########################################################################################
 
 # Calculate the breakpoint distance
-def effective_breakpoint_distance(fc_ghz: float, h_BS: float, h_UT: float) -> float:
+def effective_breakpoint_distance(fc_ghz: float, h_bs: float, h_UT: float) -> float:
     fc_hz = float(fc_ghz) * 1e9
-    h_E = 1.0
-    h_BS_effective = float(h_BS) - h_E
-    h_UT_effective = float(h_UT) - h_E
-    return 4.0 * h_BS_effective * h_UT_effective * fc_hz / 3e8
+    h_e = 1.0
+    h_bs_effective = float(h_bs) - h_e
+    h_UT_effective = float(h_UT) - h_e
+    return 4.0 * h_bs_effective * h_UT_effective * fc_hz / 3e8
 
 # UMa LOS path loss based on TR 38.901 Table 7.4.1-1
-def uma_los_path_loss(d2D: float, d3D: float, fc_ghz: float, h_BS: float = 25.0, h_UT: float = 1.5) -> float:
+def uma_los_path_loss(d2D: float, d3D: float, fc_ghz: float, h_bs: float = 25.0, h_UT: float = 1.5) -> float:
     d2D = max(float(d2D), 1.0)
     d3D = max(float(d3D), 1.0)
     fc_ghz = float(fc_ghz)
-    d_BP_effective = effective_breakpoint_distance(fc_ghz, h_BS, h_UT)
+    d_bp_effective = effective_breakpoint_distance(fc_ghz, h_bs, h_UT)
 
-    if d2D <= d_BP_effective:
+    if d2D <= d_bp_effective:
         # TR 38.901 Table 7.4.1-1, UMa LOS, referenced by TR 36.777
         pl = 28.0 + 22.0 * np.log10(d3D) + 20.0 * np.log10(fc_ghz)
     else:
@@ -74,15 +74,15 @@ def uma_los_path_loss(d2D: float, d3D: float, fc_ghz: float, h_BS: float = 25.0,
             28.0
             + 40.0 * np.log10(d3D)
             + 20.0 * np.log10(fc_ghz)
-            - 9.0 * np.log10(d_BP_effective ** 2 + (float(h_BS) - float(h_UT)) ** 2)
+            - 9.0 * np.log10(d_bp_effective ** 2 + (float(h_bs) - float(h_UT)) ** 2)
         )
     return float(pl)
 
 # UMa NLOS path loss based on TR 38.901 Table 7.4.1-1
-def uma_nlos_path_loss(d2D: float, d3D: float, fc_ghz: float, h_BS: float = 25.0, h_UT: float = 1.5) -> float:
+def uma_nlos_path_loss(d2D: float, d3D: float, fc_ghz: float, h_bs: float = 25.0, h_UT: float = 1.5) -> float:
     d3D = max(float(d3D), 1.0)
     h_UT = float(h_UT)
-    los_pl = uma_los_path_loss(d2D, d3D, fc_ghz, h_BS, h_UT)
+    los_pl = uma_los_path_loss(d2D, d3D, fc_ghz, h_bs, h_UT)
     # TR 38.901 Table 7.4.1-1, UMa LOS/NLOS, referenced by TR 36.777
     nlos_pl = (
         13.54
@@ -93,11 +93,11 @@ def uma_nlos_path_loss(d2D: float, d3D: float, fc_ghz: float, h_BS: float = 25.0
     return float(max(los_pl, nlos_pl))
 
 # UMa-AV LOS path loss based on TR 36.777 Annex B Table B-2
-def uma_av_los_path_loss(d2D: float, d3D: float, fc_ghz: float, h_BS: float = 25.0, h_UT: float = 1.5) -> float:
+def uma_av_los_path_loss(d2D: float, d3D: float, fc_ghz: float, h_bs: float = 25.0, h_UT: float = 1.5) -> float:
     h_UT = float(h_UT)
     if 1.5 <= h_UT <= 22.5:
-        return uma_los_path_loss(d2D, d3D, fc_ghz, h_BS, h_UT)
-    if (22.5 < h_UT <= 300.0) and (d2D <= 4.0 * 1e3):
+        return uma_los_path_loss(d2D, d3D, fc_ghz, h_bs, h_UT)
+    if 22.5 < h_UT <= 300.0:
         d3D = max(float(d3D), 1.0)
         # TR 36.777 Annex B Table B-2, UMa-AV LOS
         pl = 28.0 + 22.0 * np.log10(d3D) + 20.0 * np.log10(float(fc_ghz))
@@ -105,10 +105,10 @@ def uma_av_los_path_loss(d2D: float, d3D: float, fc_ghz: float, h_BS: float = 25
     raise ValueError("UMa-AV LOS pathloss is defined for 1.5 m <= hUT <= 300 m")
 
 # UMa-AV NLOS path loss based on TR 36.777 Annex B Table B-2
-def uma_av_nlos_path_loss(d2D: float, d3D: float, fc_ghz: float, h_BS: float = 25.0, h_UT: float = 1.5) -> float:
+def uma_av_nlos_path_loss(d2D: float, d3D: float, fc_ghz: float, h_bs: float = 25.0, h_UT: float = 1.5) -> float:
     h_UT = float(h_UT)
     if 1.5 <= h_UT <= 22.5:
-        return uma_nlos_path_loss(d2D, d3D, fc_ghz, h_BS, h_UT)
+        return uma_nlos_path_loss(d2D, d3D, fc_ghz, h_bs, h_UT)
     if 22.5 < h_UT <= 100.0:
         d3D = max(float(d3D), 1.0)
         # TR 36.777 Annex B Table B-2, UMa-AV NLOS
@@ -120,6 +120,20 @@ def uma_av_nlos_path_loss(d2D: float, d3D: float, fc_ghz: float, h_BS: float = 2
         return float(pl)
     raise ValueError("UMa-AV NLOS pathloss is defined for 1.5 m <= hUT <= 100 m")
 
+# UMa-AV shadow fading standard deviation based on TR 36.777 Annex B Table B-3
+def uma_av_shadow_fading_sigma(los: bool, h_UT: float) -> float:
+    h_UT = float(h_UT)
+    if 1.5 <= h_UT <= 22.5:
+        # TR 38.901 Table 7.4.1-1, UMa shadow fading, referenced by TR 36.777
+        return 4.0 if los else 6.0
+    if los and 22.5 < h_UT <= 300.0:
+        # TR 36.777 Annex B Table B-3, UMa-AV LOS shadow fading standard deviation
+        return float(4.64 * np.exp(-0.0066 * h_UT))
+    if (not los) and 22.5 < h_UT <= 100.0:
+        # TR 36.777 Annex B Table B-3, UMa-AV NLOS shadow fading standard deviation
+        return 6.0
+    raise ValueError("UMa-AV shadow fading sigma is undefined for this LOS/NLOS and hUT")
+
 ##########################################################################################
 # Main RadioModel class that uses the above functions to calculate path loss, shadow fading,
 # received power, SINR, and serving BS selection.
@@ -127,11 +141,6 @@ def uma_av_nlos_path_loss(d2D: float, d3D: float, fc_ghz: float, h_BS: float = 2
 class RadioModel:
     def __init__(self, sim):
         self.sim = sim
-
-    def is_aerial_link(self, ue_idx: int | None, bs_idx: int) -> bool:
-        if self.sim.bs_is_uav[bs_idx]:
-            return True
-        return ue_idx is not None and self.sim.is_aerial_ue
 
     # Calculate 2D and 3D distances between UE and BS, ensuring minimum 3D distance of 1m to avoid singularities
     def calculate_distances(self, ue_x, ue_y, bs_idx: int, ue_idx: int | None = None):
@@ -143,48 +152,84 @@ class RadioModel:
         d3D = max(float(np.hypot(d2D, delta_height)), 1.0)
         return d2D, d3D
 
+    def _link_state(self, ue_idx: int, bs_idx: int) -> dict:
+        return self.sim.sf_cache.setdefault((ue_idx, bs_idx), {})
+
+    def _link_los_state(
+        self,
+        ue_idx: int | None,
+        bs_idx: int,
+        p_los: float,
+    ) -> bool:
+        if ue_idx is not None:
+            state = self._link_state(ue_idx, bs_idx)
+            if 'los' in state:
+                return bool(state['los'])
+
+        p_los = float(np.clip(p_los, 0.0, 1.0))
+        if p_los <= 0.0:
+            sampled_los = False
+        elif p_los >= 1.0:
+            sampled_los = True
+        else:
+            sampled_los = bool(np.random.random() < p_los)
+
+        if ue_idx is None:
+            return sampled_los
+
+        state['los'] = sampled_los
+        return bool(state['los'])
+
     def calculate_path_loss(self, ue_x, ue_y, bs_idx: int, ue_idx: int | None = None):
         d2D, d3D = self.calculate_distances(ue_x, ue_y, bs_idx, ue_idx)
         h_UT = self.sim.get_ue_height_m(ue_idx) if ue_idx is not None else self.sim.h_UT
         p_los = uma_av_los_probability(d2D, h_UT)
-        los = p_los >= 0.5
+        los = self._link_los_state(ue_idx, bs_idx, p_los)
         if los:
-            pl = uma_av_los_path_loss(d2D, d3D, self.sim.fc, self.sim.h_BS, h_UT)
+            pl = uma_av_los_path_loss(d2D, d3D, self.sim.fc, self.sim.h_bs, h_UT)
         else:
-            pl = uma_av_nlos_path_loss(d2D, d3D, self.sim.fc, self.sim.h_BS, h_UT)
+            pl = uma_av_nlos_path_loss(d2D, d3D, self.sim.fc, self.sim.h_bs, h_UT)
         return float(pl), los, float(p_los)
 
     def shadow_fading(self, ue_idx, bs_idx, los, ue_pos):
-        if self.is_aerial_link(ue_idx, bs_idx):
-            sigma = self.sim.sf_sigma_uav
+        state = self._link_state(ue_idx, bs_idx)
+        if self.sim.is_aerial_ue:
+            if 'los' not in state:
+                state['los'] = bool(los)
+            link_los = bool(state['los'])
+            h_UT = self.sim.get_ue_height_m(ue_idx)
+            sigma = uma_av_shadow_fading_sigma(link_los, h_UT)
         else:
-            sigma = self.sim.sf_sigma['LOS'] if los else self.sim.sf_sigma['NLOS']
+            link_los = bool(los)
+            sigma = self.sim.sf_sigma['LOS'] if link_los else self.sim.sf_sigma['NLOS']
 
-        key = (ue_idx, bs_idx)
-        state = self.sim.sf_cache.get(key)
-        if state is None:
-            val = float(np.random.normal(0.0, sigma))
-            val = float(np.clip(val, -3 * sigma, 3 * sigma))
-            self.sim.sf_cache[key] = {'x': ue_pos[0], 'y': ue_pos[1], 'val': val, 'los': bool(los)}
-            return val
+        def sample_shadow_fading() -> float:
+            return float(np.clip(np.random.normal(0.0, sigma), -3.0 * sigma, 3.0 * sigma))
 
-        oldx, oldy = state['x'], state['y']
-        oldval = state['val']
+        x, y = float(ue_pos[0]), float(ue_pos[1])
+        if 'shadow_fading_db' not in state:
+            state['shadow_fading_db'] = sample_shadow_fading()
+            state['last_x'] = x
+            state['last_y'] = y
+            state['distance_since_sf_update_m'] = 0.0
+            state['los'] = link_los
+            return float(state['shadow_fading_db'])
 
-        dx = float(abs(ue_pos[0] - oldx))
-        dy = float(abs(ue_pos[1] - oldy))
-        delta = dx + dy
+        delta = float(np.hypot(x - state['last_x'], y - state['last_y']))
+        state['last_x'] = x
+        state['last_y'] = y
+        state['distance_since_sf_update_m'] += delta
 
-        turns = int(self.sim.ue_turns_in_step[ue_idx]) if hasattr(self.sim, 'ue_turns_in_step') else 0
-        if turns > 0:
-            delta += float(turns) * float(self.sim.sf_turn_penalty_m)
+        update_distance = float(getattr(
+            self.sim,
+            'shadow_fading_update_distance_m',
+            config.SHADOW_FADING_UPDATE_DISTANCE_M,
+        ))
+        if state['distance_since_sf_update_m'] >= update_distance:
+            state['shadow_fading_db'] = sample_shadow_fading()
+            state['distance_since_sf_update_m'] = 0.0
 
-        rho = 0.0 if self.sim.sf_decorr <= 0 else float(np.exp(-delta / self.sim.sf_decorr))
-        innov = float(np.random.normal(0.0, sigma))
-        newval = rho * oldval + (np.sqrt(max(0.0, 1.0 - rho ** 2)) * innov)
-        newval = float(np.clip(newval, -3 * sigma, 3 * sigma))
-        self.sim.sf_cache[key] = {'x': ue_pos[0], 'y': ue_pos[1], 'val': newval, 'los': bool(los)}
-        return newval
+        return float(state['shadow_fading_db'])
 
 # Friss equation to calculate received power in dBm based on transmit power, gains, and path loss
     def calculate_received_power(self, bs_idx: int, path_loss_db: float):
@@ -192,7 +237,7 @@ class RadioModel:
         return ptx + self.sim.gtx + self.sim.grx - float(path_loss_db)
 
     def get_serving_bs(self, ue_x, ue_y, ue_idx):
-        neighbor_count = 5
+        neighbor_count = 6
         candidate_target = max(neighbor_count + 1, int(self.sim.max_candidate_bs))
         dist_list_all = []
         dist_list = []
@@ -215,7 +260,7 @@ class RadioModel:
         candidate_indices = [i for i, _ in dist_list[:max(1, candidate_target)]]
 
         # Fill short in-range candidate lists with nearest out-of-range BSs so
-        # the CSV can still report the top 5 non-serving BSs when available.
+        # ranking views can still report enough non-serving BSs when available.
         for i, _ in dist_list_all:
             if len(candidate_indices) >= max(1, candidate_target):
                 break

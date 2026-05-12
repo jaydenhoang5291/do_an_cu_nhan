@@ -24,10 +24,6 @@ class CellularNetworkReceivedPower:
         rect_len_m: float = 4000.0,
         rect_wid_m: float = 3000.0,
         grid_spacing_m: float = 200.0,
-        add_uav_cover: bool = False,
-        uav_radius_m: float = 750.0,
-        uav_altitude_m: float = 100.0,
-        uav_ptx_dbm: float = 40.0,
         ue_height_m: float | None = None,
         fast_mode: bool = True,
         show_link_lines: bool = True,
@@ -56,13 +52,6 @@ class CellularNetworkReceivedPower:
         self.x_lines = GridMobility._make_lines(self.rect_xmin, self.rect_xmax, self.grid_spacing_m)
         self.y_lines = GridMobility._make_lines(self.rect_ymin, self.rect_ymax, self.grid_spacing_m)
 
-        # Kept for backward-compatible constructor calls. UAV is modeled as a
-        # high-altitude UE; the simulator no longer deploys aerial BS nodes.
-        self.add_uav_cover = False
-        self.uav_radius_m = float(uav_radius_m)
-        self.uav_altitude_m = float(uav_altitude_m)
-        self.uav_ptx_dbm = float(uav_ptx_dbm)
-
         # Radio params
         self.ptx, self.gtx, self.grx = config.PTX, config.GTX, config.GRX
         self.sensitivity = config.SENSITIVITY
@@ -75,17 +64,9 @@ class CellularNetworkReceivedPower:
         self.h_bs, self.h_ut = config.H_BS, config.H_UT
         self.ue_height_m = self._validate_ue_height(ue_height_m)
 
-        # Ground BS uses NLOS by default.
-        self.ple_nlos = config.PLE_NLOS
-
-        # Aerial radio params kept for UE-at-height formulas with ground BS.
-        self.ple_uav_los = config.PLE_UAV_LOS
-
         # Shadow fading 
         self.sf_sigma = config.SF_SIGMA
-        self.sf_sigma_uav = config.SF_SIGMA_UAV
-        self.sf_decorr = float(max(20.0, 0.25 * self.grid_spacing_m))
-        self.sf_turn_penalty_m = float(0.50 * self.grid_spacing_m)
+        self.shadow_fading_update_distance_m = config.SHADOW_FADING_UPDATE_DISTANCE_M
         self.sf_cache = {}
 
         # UE
@@ -99,8 +80,8 @@ class CellularNetworkReceivedPower:
             for i in range(self.num_ues)
         ] if self.is_aerial_ue else []
 
-        self.steps = 100
-        self.time_per_step = 3.0
+        self.steps = int(config.SIMULATION_STEPS)
+        self.time_per_step = float(config.TIME_PER_STEP_S)
         self.pause_s = (0.03 if fast_mode else 0.08)
         self.show_link_lines = bool(show_link_lines)
 
@@ -108,13 +89,13 @@ class CellularNetworkReceivedPower:
         self.scale_factor = 500.0
         self.hexes = build_hex_cover(self.scale_factor, self.width, self.height, self.center, self.rect_xmin, self.rect_xmax, self.rect_ymin, self.rect_ymax)
         self.bs_positions, self.bs_heights, self.bs_ptx = [], [], []
-        self.bs_is_uav = []
 
         # UE state
         self.ue_positions = []
         self.ue_dir = []  # 0:E,1:N,2:W,3:S
         self.ue_serving_bs = [None] * self.num_ues
         self.previous_serving_bs = [None] * self.num_ues
+        self.ue_handover_count = [0] * self.num_ues
 
         # UE stop-and-go after turns:
         self.turns_before_stop = config.TURNS_BEFORE_STOP
@@ -129,9 +110,15 @@ class CellularNetworkReceivedPower:
 
         # UI + plot
         plt.ion()
-        self.fig = plt.figure(figsize=(11.5, 10))
-        self.ax = self.fig.add_axes([0.06, 0.1, 0.72, 0.82])
-        self.height_ax = self.fig.add_axes([0.83, 0.18, 0.11, 0.64])
+        self.fig = plt.figure(figsize=(12.5, 10))
+        self.ax = self.fig.add_axes([0.05, 0.1, 0.68, 0.82])
+        # Right-side panels are stacked with explicit gaps so titles cannot
+        # overlap neighboring panels when Matplotlib scales fonts differently.
+        right_x = 0.78
+        right_w = 0.19
+        self.height_ax = self.fig.add_axes([right_x, 0.68, right_w, 0.21])
+        self.ue_info_ax = self.fig.add_axes([right_x, 0.42, right_w, 0.15])
+        self.bs_table_ax = self.fig.add_axes([right_x, 0.10, right_w, 0.25])
         self.toggle_ax = self.fig.add_axes([0.08, 0.02, 0.12, 0.05])
         self.restart_ax = self.fig.add_axes([0.22, 0.02, 0.14, 0.05])
         self.toggle_button = Button(self.toggle_ax, 'Stop', color='lightcoral')
@@ -152,14 +139,16 @@ class CellularNetworkReceivedPower:
             return float(config.H_UT)
 
         height = float(ue_height_m)
-        if height not in config.AERIAL_UE_HEIGHTS_M:
-            allowed = ", ".join(f"{h:g}" for h in config.AERIAL_UE_HEIGHTS_M)
-            raise ValueError(f"UE UAV height must be one of: {allowed} m")
+        if not (config.UE_HEIGHT_MIN_M <= height <= config.UE_HEIGHT_MAX_M):
+            raise ValueError(
+                "UE height is outside the research range "
+                f"({config.UE_HEIGHT_MIN_M:g}-{config.UE_HEIGHT_MAX_M:g} m)"
+            )
         return height
 
     @property
     def is_aerial_ue(self) -> bool:
-        return float(self.ue_height_m) in config.AERIAL_UE_HEIGHTS_M
+        return float(self.ue_height_m) > float(config.H_UT)
 
     def get_ue_height_m(self, ue_idx: int) -> float:
         return float(self.ue_heights_m[ue_idx])
@@ -180,7 +169,6 @@ class CellularNetworkReceivedPower:
         self.bs_positions.clear()
         self.bs_heights.clear()
         self.bs_ptx.clear()
-        self.bs_is_uav.clear()
         bs_colors = ['red', 'green', 'blue', 'cyan', 'magenta', 'yellow', 'black', 'orange', 'purple', 'brown']
         for idx, hex_obj in enumerate(self.hexes):
             x, y = axial_to_pixel(hex_obj.q, hex_obj.r, self.scale_factor)
@@ -188,7 +176,6 @@ class CellularNetworkReceivedPower:
             self.bs_positions.append((cx, cy))
             self.bs_heights.append(self.h_bs)
             self.bs_ptx.append(self.ptx)
-            self.bs_is_uav.append(False)
             self.ax.plot(cx, cy, marker='^', color=bs_colors[idx % len(bs_colors)],
                          markersize=5, zorder=6)
 
@@ -231,6 +218,8 @@ class CellularNetworkReceivedPower:
             pad=28
         )
         self.setup_height_plot()
+        self.update_selected_ue_info()
+        self.update_bs_power_table()
         plt.draw()
 
     def setup_height_plot(self):
@@ -246,7 +235,7 @@ class CellularNetworkReceivedPower:
             color='tab:red',
             linestyle='--',
             linewidth=1.5,
-            label=f'Ground BS {self.h_bs:g} m'
+            label=f'BS height {self.h_bs:g} m'
         )
         self.height_ax.vlines(
             x_ues,
@@ -266,13 +255,14 @@ class CellularNetworkReceivedPower:
         )
 
         for x, height in zip(x_ues, ue_heights):
-            self.height_ax.text(x, height + y_max * 0.025, f'{height:g}', ha='center', va='bottom', fontsize=8)
+            self.height_ax.text(x, height + y_max * 0.025, f'{height:g} m', ha='center', va='bottom', fontsize=8)
 
         self.height_ax.set_xlim(0.5, max(1.5, self.num_ues + 0.5))
         self.height_ax.set_ylim(0, y_max)
-        self.height_ax.set_title('Height Profile', fontsize=10)
-        self.height_ax.set_ylabel('Height (m)')
-        self.height_ax.set_xlabel('UE')
+        self.height_ax.set_title('UE height above ground', fontsize=8, fontweight='bold', pad=3)
+        self.height_ax.set_ylabel('Height (m)', fontsize=8)
+        self.height_ax.set_xlabel('UE index', fontsize=8)
+        self.height_ax.tick_params(axis='both', labelsize=7)
         self.height_ax.grid(axis='y', linestyle=':', linewidth=0.8, alpha=0.6)
         self.height_ax.legend(loc='upper right', fontsize=8)
 
@@ -281,6 +271,129 @@ class CellularNetworkReceivedPower:
             self.height_ax.set_xticklabels([f'UE{i}' for i in range(self.num_ues)], rotation=45, ha='right')
         else:
             self.height_ax.set_xticks([])
+
+    def update_bs_power_table(self, ue_idx: int = 0, serving_bs=None, serving_prx=None, neighbors=None):
+        self.bs_table_ax.clear()
+        self.bs_table_ax.axis('off')
+        self.bs_table_ax.text(
+            0.5,
+            0.98,
+            'Connected BS / neighbors',
+            transform=self.bs_table_ax.transAxes,
+            ha='center',
+            va='top',
+            fontsize=8,
+            fontweight='bold',
+        )
+
+        rows = []
+        if serving_bs is not None and serving_prx is not None:
+            rows.append((int(serving_bs), float(serving_prx), True))
+
+        if neighbors:
+            for bs_idx, prx in neighbors[:6]:
+                if serving_bs is not None and int(bs_idx) == int(serving_bs):
+                    continue
+                rows.append((int(bs_idx), float(prx), False))
+
+        rows = sorted(rows[:7], key=lambda row: row[1], reverse=True)
+        self.bs_power_table_rows = rows
+
+        cell_text = [[str(bs_idx), f'{prx:.2f}'] for bs_idx, prx, _ in rows]
+        while len(cell_text) < 7:
+            cell_text.append(['-', '-'])
+
+        table = self.bs_table_ax.table(
+            cellText=cell_text,
+            colLabels=['BS index', 'Rx power (dBm)'],
+            bbox=[0.0, 0.0, 1.0, 0.88],
+            cellLoc='center',
+            colLoc='center',
+            colWidths=[0.42, 0.58],
+        )
+        table.auto_set_font_size(False)
+        table.set_fontsize(8)
+        table.scale(1.0, 1.25)
+
+        for (row, col), cell in table.get_celld().items():
+            cell.set_linewidth(0.6)
+            if row == 0:
+                cell.set_facecolor('#e6e6e6')
+                cell.set_text_props(weight='bold')
+            elif row - 1 < len(rows) and rows[row - 1][2]:
+                cell.set_facecolor('#d9ead3')
+            else:
+                cell.set_facecolor('white')
+
+        self.bs_power_table = table
+
+    @staticmethod
+    def link_quality_color(prx_dbm):
+        if prx_dbm is None:
+            return '#8c8c8c'
+        if float(prx_dbm) > -70.0:
+            return '#2ca02c'
+        if float(prx_dbm) >= -90.0:
+            return '#ffbf00'
+        return '#d62728'
+
+    def update_selected_ue_info(
+        self,
+        ue_idx: int = 0,
+        x=None,
+        y=None,
+        serving_bs=None,
+        prx_dbm=None,
+        los_state=None,
+        handover_count=None,
+        speed_kmh=None,
+    ):
+        self.ue_info_ax.clear()
+        self.ue_info_ax.axis('off')
+
+        if x is None or y is None:
+            text = (
+                f"UE index: {ue_idx}\n"
+                "x, y: -\n"
+                "Connected BS: -\n"
+                "Rx power: -\n"
+                "LOS/NLOS: -\n"
+                "Handover: 0\n"
+                "Speed: -"
+            )
+        else:
+            prx_text = f"{float(prx_dbm):.2f} dBm" if prx_dbm is not None else "-"
+            speed_text = f"{float(speed_kmh):.2f} km/h" if speed_kmh is not None else "-"
+            text = (
+                f"UE index: {ue_idx}\n"
+                f"x, y: {float(x):.1f}, {float(y):.1f}\n"
+                f"Connected BS: {serving_bs if serving_bs is not None else '-'}\n"
+                f"Rx power: {prx_text}\n"
+                f"\nLOS/NLOS: {los_state if los_state is not None else '-'}\n"
+                f"Handover: {handover_count if handover_count is not None else 0}\n"
+                f"Speed: {speed_text}"
+            )
+
+        self.ue_info_ax.text(
+            0.5,
+            0.98,
+            'Connected BS info',
+            transform=self.ue_info_ax.transAxes,
+            ha='center',
+            va='top',
+            fontsize=8,
+            fontweight='bold',
+        )
+        self.ue_info_ax.text(
+            0.0,
+            0.86,
+            text,
+            transform=self.ue_info_ax.transAxes,
+            ha='left',
+            va='top',
+            fontsize=8,
+            family='monospace',
+        )
 
     def setup_ues(self):
         self.ue_positions.clear()
@@ -318,6 +431,7 @@ class CellularNetworkReceivedPower:
         self.ue_pause_remaining = [0] * self.num_ues
         self.ue_ramp_step = [-1] * self.num_ues
         self.ue_speed_factor = np.ones(self.num_ues, dtype=float)
+        self.ue_handover_count = [0] * self.num_ues
         self.sf_cache = {}
 
         self.logger.setup_log()
@@ -380,18 +494,43 @@ class CellularNetworkReceivedPower:
             else:
                 los_probability = None
                 los_state = None
+                pl_base = None
+                sf_db = None
                 prx_inst = None
                 sinr = None
 
             prev_bs = self.previous_serving_bs[ue_idx]
             handover_flag = 1 if (prev_bs is not None and bs is not None and bs != prev_bs) else 0
+            if handover_flag:
+                self.ue_handover_count[ue_idx] += 1
             self.previous_serving_bs[ue_idx] = bs
+
+            link_color = self.link_quality_color(prx_inst)
+            self.ue_points[ue_idx].set_color(link_color)
+            self.ue_points[ue_idx].set_markeredgecolor('black')
+            self.ue_points[ue_idx].set_markeredgewidth(0.4)
+            self.ue_lines[ue_idx].set_color(link_color)
 
             self.logger.log_ue_data(
                 ue_idx, x, y, bs, prx_inst, sinr, handover_flag, neighbors,
                 los_probability=los_probability,
-                los_state=los_state
+                los_state=los_state,
+                pathloss_db=pl_base,
+                shadow_fading_db=sf_db
             )
+
+            if ue_idx == 0:
+                self.update_selected_ue_info(
+                    ue_idx,
+                    x,
+                    y,
+                    bs,
+                    prx_inst,
+                    los_state,
+                    self.ue_handover_count[ue_idx],
+                    float(self.ue_speeds[ue_idx] * self.ue_speed_factor[ue_idx]),
+                )
+                self.update_bs_power_table(ue_idx, bs, prx_inst, neighbors)
 
         self.time_text.set_text(f'Step: {frame}')
         self.fig.canvas.draw()

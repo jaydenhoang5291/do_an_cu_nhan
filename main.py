@@ -9,6 +9,18 @@ import config
 from simulation import CellularNetworkReceivedPower
 from utils import _read_float, _read_int
 
+
+def _read_ue_height_in_range(prompt: str, default: float) -> float:
+    while True:
+        height = _read_float(prompt, default)
+        if config.UE_HEIGHT_MIN_M <= height <= config.UE_HEIGHT_MAX_M:
+            return height
+        print(
+            "Invalid UE height: outside the research range "
+            f"({config.UE_HEIGHT_MIN_M:g}-{config.UE_HEIGHT_MAX_M:g} m). Please enter again."
+        )
+
+
 if __name__ == "__main__":
     L = _read_float("Enter RECTANGLE LENGTH (m): ", 8000.0)
     W = _read_float("Enter RECTANGLE WIDTH (m): ", 5000.0)
@@ -18,8 +30,10 @@ if __name__ == "__main__":
     use_aerial_ue = input("Use aerial UE height? (y/N): ").strip().lower().startswith('y')
     ue_height = None
     if use_aerial_ue:
-        allowed = "/".join(f"{h:g}" for h in config.AERIAL_UE_HEIGHTS_M)
-        ue_height = _read_float(f"Aerial UE height ({allowed} m, default 100): ", 100.0)
+        ue_height = _read_ue_height_in_range(
+            f"UE height ({config.UE_HEIGHT_MIN_M:g}-{config.UE_HEIGHT_MAX_M:g} m, default 100): ",
+            100.0,
+        )
 
     show_lines = input("Show UE - BS connection lines? (y/N): ").strip().lower().startswith('y')
     sim = CellularNetworkReceivedPower(

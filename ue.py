@@ -17,6 +17,8 @@ class AerialUE:
         self.speed_mps = float(self.speed_mps)
         self.direction_rad = float(self.direction_rad)
 
-        if self.height_m not in config.AERIAL_UE_HEIGHTS_M:
-            allowed = ", ".join(f"{h:g}" for h in config.AERIAL_UE_HEIGHTS_M)
-            raise ValueError(f"Aerial UE height must be one of: {allowed} m")
+        if not (config.UE_HEIGHT_MIN_M <= self.height_m <= config.UE_HEIGHT_MAX_M):
+            raise ValueError(
+                "Aerial UE height is outside the research range "
+                f"({config.UE_HEIGHT_MIN_M:g}-{config.UE_HEIGHT_MAX_M:g} m)"
+            )

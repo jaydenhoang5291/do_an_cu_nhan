@@ -4,12 +4,13 @@ including radio parameters, handover, stop-and-go mobility, and noise.
 """
 
 # Radio Params
-PTX = 35.0       # Power Transmit (dBm)
+# Based on 3GPP TR 36.777 Table A.1-1
+PTX = 46.0       # Power Transmit of Base Station (dBm)
 GTX = 2.0        # Gain Transmit
 GRX = 2.0        # Gain Receive
 
 SENSITIVITY = -110.0
-FC = 4.0  # GHz
+FC = 2.0  # GHz
 HOM = 3.0
 
 MAX_BS_RANGE = 600.0
@@ -17,15 +18,12 @@ MAX_CANDIDATE_BS = 6
 
 H_BS = 25.0     # Height of BS_ground (m)
 H_UT = 1.5      # Height of UE_ground (m)
-AERIAL_UE_HEIGHTS_M = (50.0, 100.0, 200.0, 300.0)       # Allowed heights for aerial UEs (m)
-
-# Path Loss Exponents
-PLE_NLOS = 4.1
-PLE_UAV_LOS = 2.8
+UE_HEIGHT_MIN_M = 1.5
+UE_HEIGHT_MAX_M = 300.0
 
 # Shadow Fading
 SF_SIGMA = {'LOS': 4.6, 'NLOS': 10.0}
-SF_SIGMA_UAV = 14.0
+SHADOW_FADING_UPDATE_DISTANCE_M = 25.0
 
 # UE Stop-and-Go config after turns
 TURNS_BEFORE_STOP = 3

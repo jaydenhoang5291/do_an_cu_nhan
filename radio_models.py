@@ -58,10 +58,15 @@ def effective_breakpoint_distance(fc_ghz: float, h_bs: float, h_UT: float) -> fl
     h_UT_effective = float(h_UT) - h_e
     return 4.0 * h_bs_effective * h_UT_effective * fc_hz / 3e8
 
+# d2D distance calculations with minimum 10m 2D distance TS 138.901 Table 7.4.1-1
+def effective_uma_distances(d2D: float, h_bs: float, h_UT: float) -> tuple[float, float]:
+    d2D_eff = max(float(d2D), 10.0)
+    d3D_eff = float(np.hypot(d2D_eff, float(h_bs) - float(h_UT)))
+    return d2D_eff, d3D_eff
+
 # UMa LOS path loss based on TR 38.901 Table 7.4.1-1
 def uma_los_path_loss(d2D: float, d3D: float, fc_ghz: float, h_bs: float = 25.0, h_UT: float = 1.5) -> float:
-    d2D = max(float(d2D), 1.0)
-    d3D = max(float(d3D), 1.0)
+    d2D, d3D = effective_uma_distances(d2D, h_bs, h_UT)
     fc_ghz = float(fc_ghz)
     d_bp_effective = effective_breakpoint_distance(fc_ghz, h_bs, h_UT)
 
@@ -80,7 +85,7 @@ def uma_los_path_loss(d2D: float, d3D: float, fc_ghz: float, h_bs: float = 25.0,
 
 # UMa NLOS path loss based on TR 38.901 Table 7.4.1-1
 def uma_nlos_path_loss(d2D: float, d3D: float, fc_ghz: float, h_bs: float = 25.0, h_UT: float = 1.5) -> float:
-    d3D = max(float(d3D), 1.0)
+    d2D, d3D = effective_uma_distances(d2D, h_bs, h_UT)
     h_UT = float(h_UT)
     los_pl = uma_los_path_loss(d2D, d3D, fc_ghz, h_bs, h_UT)
     # TR 38.901 Table 7.4.1-1, UMa LOS/NLOS, referenced by TR 36.777
@@ -98,7 +103,7 @@ def uma_av_los_path_loss(d2D: float, d3D: float, fc_ghz: float, h_bs: float = 25
     if 1.5 <= h_UT <= 22.5:
         return uma_los_path_loss(d2D, d3D, fc_ghz, h_bs, h_UT)
     if 22.5 < h_UT <= 300.0:
-        d3D = max(float(d3D), 1.0)
+        _, d3D = effective_uma_distances(d2D, h_bs, h_UT)
         # TR 36.777 Annex B Table B-2, UMa-AV LOS
         pl = 28.0 + 22.0 * np.log10(d3D) + 20.0 * np.log10(float(fc_ghz))
         return float(pl)
@@ -110,7 +115,7 @@ def uma_av_nlos_path_loss(d2D: float, d3D: float, fc_ghz: float, h_bs: float = 2
     if 1.5 <= h_UT <= 22.5:
         return uma_nlos_path_loss(d2D, d3D, fc_ghz, h_bs, h_UT)
     if 22.5 < h_UT <= 100.0:
-        d3D = max(float(d3D), 1.0)
+        _, d3D = effective_uma_distances(d2D, h_bs, h_UT)
         # TR 36.777 Annex B Table B-2, UMa-AV NLOS
         pl = (
             -17.5
@@ -225,16 +230,37 @@ class RadioModel:
             'shadow_fading_update_distance_m',
             config.SHADOW_FADING_UPDATE_DISTANCE_M,
         ))
+        # Shadow fading update with each 25m of UE movement
         if state['distance_since_sf_update_m'] >= update_distance:
             state['shadow_fading_db'] = sample_shadow_fading()
             state['distance_since_sf_update_m'] = 0.0
 
         return float(state['shadow_fading_db'])
 
-# Friss equation to calculate received power in dBm based on transmit power, gains, and path loss
-    def calculate_received_power(self, bs_idx: int, path_loss_db: float):
-        ptx = float(self.sim.bs_ptx[bs_idx])
-        return ptx + self.sim.gtx + self.sim.grx - float(path_loss_db)
+    def get_total_bs_tx_power_dbm(self, bs_idx: int) -> float:
+        return float(self.sim.bs_ptx[bs_idx])
+
+    def active_lte_subcarrier_count(self) -> float:
+        n_subcarriers = float(self.sim.lte_n_rb * self.sim.lte_n_subcarriers_per_rb)
+        if n_subcarriers <= 0.0:
+            raise ValueError("LTE RB/subcarrier configuration must be positive")
+        return n_subcarriers
+
+    # Calculate total received power in dBm at the UE from a given BS index and path loss, including shadow fading.
+    def calculate_total_received_power(self, bs_idx: int, path_loss_db: float) -> float:
+        ptx_total_dbm = self.get_total_bs_tx_power_dbm(bs_idx)
+        return float(ptx_total_dbm + self.sim.gtx + self.sim.grx - float(path_loss_db))
+
+    def calculate_rsrp_from_received_power(self, prx_dbm: float) -> float:
+        # System-level approximation: RSRP is derived from total received power
+        # by assuming BS power is spread uniformly over active LTE subcarriers.
+        # This follows the LTE RB structure and RSRP definition, but is not an
+        # exact 3GPP PHY CRS power formula.
+        return float(float(prx_dbm) - 10.0 * np.log10(self.active_lte_subcarrier_count()))
+
+    def calculate_rsrp(self, bs_idx: int, path_loss_db: float) -> float:
+        prx_dbm = self.calculate_total_received_power(bs_idx, path_loss_db)
+        return self.calculate_rsrp_from_received_power(prx_dbm)
 
     def get_serving_bs(self, ue_x, ue_y, ue_idx):
         neighbor_count = 6
@@ -276,9 +302,9 @@ class RadioModel:
             pl_base, los_i, _ = self.calculate_path_loss(ue_x, ue_y, i, ue_idx)
             sf_db = self.shadow_fading(ue_idx, i, los_i, (ue_x, ue_y))
             pl = pl_base + sf_db
-            prx = self.calculate_received_power(i, pl)
+            rsrp = self.calculate_rsrp(i, pl)
             _, d3D = self.calculate_distances(ue_x, ue_y, i, ue_idx)
-            cand.append((i, float(prx), float(d3D)))
+            cand.append((i, float(rsrp), float(d3D)))
 
         if not cand:
             self.sim.ue_serving_bs[ue_idx] = None
@@ -291,25 +317,25 @@ class RadioModel:
             return neighbors[:neighbor_count]
 
         if current_bs is None:
-            best_bs, best_prx, best_d = cand[0]
+            best_bs, best_rsrp, best_d = cand[0]
             self.sim.ue_serving_bs[ue_idx] = best_bs
-            return best_bs, best_prx, best_d, get_neighbors(best_bs)
+            return best_bs, best_rsrp, best_d, get_neighbors(best_bs)
 
         cur = next((t for t in cand if t[0] == current_bs), None)
         if cur is None:
-            best_bs, best_prx, best_d = cand[0]
+            best_bs, best_rsrp, best_d = cand[0]
             self.sim.ue_serving_bs[ue_idx] = best_bs
-            return best_bs, best_prx, best_d, get_neighbors(best_bs)
+            return best_bs, best_rsrp, best_d, get_neighbors(best_bs)
 
-        cur_prx, cur_d = float(cur[1]), float(cur[2])
-        for bs_idx, bs_prx, bs_d in cand:
+        cur_rsrp, cur_d = float(cur[1]), float(cur[2])
+        for bs_idx, bs_rsrp, bs_d in cand:
             if bs_idx == current_bs:
                 continue
-            if float(bs_prx) > cur_prx + float(self.sim.hom):
+            if float(bs_rsrp) > cur_rsrp + float(self.sim.hom):
                 self.sim.ue_serving_bs[ue_idx] = bs_idx
-                return bs_idx, float(bs_prx), float(bs_d), get_neighbors(bs_idx)
+                return bs_idx, float(bs_rsrp), float(bs_d), get_neighbors(bs_idx)
 
-        return current_bs, cur_prx, cur_d, get_neighbors(current_bs)
+        return current_bs, cur_rsrp, cur_d, get_neighbors(current_bs)
 
     def calculate_sinr(self, ue_idx, serving_bs_idx, prx_dbm):
         N_mw = 10 ** (config.N_DBM / 10.0)
@@ -320,7 +346,7 @@ class RadioModel:
                 continue
             pl, los_i, _ = self.calculate_path_loss(ue_x, ue_y, i, ue_idx)
             sf_i = self.shadow_fading(ue_idx, i, los_i, (ue_x, ue_y))
-            prx_i = self.calculate_received_power(i, pl + sf_i)
+            prx_i = self.calculate_total_received_power(i, pl + sf_i)
             if prx_i >= self.sim.sensitivity:
                 interf += 10 ** (prx_i / 10.0)
         prx_mw = 10 ** (prx_dbm / 10.0)

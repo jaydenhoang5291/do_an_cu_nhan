@@ -57,6 +57,8 @@ class CellularNetworkReceivedPower:
         self.sensitivity = config.SENSITIVITY
         self.fc = config.FC
         self.hom = config.HOM
+        self.lte_n_rb = config.LTE_N_RB
+        self.lte_n_subcarriers_per_rb = config.LTE_N_SUBCARRIERS_PER_RB
 
         self.max_bs_range = config.MAX_BS_RANGE
         self.max_candidate_bs = config.MAX_CANDIDATE_BS
@@ -178,6 +180,16 @@ class CellularNetworkReceivedPower:
             self.bs_ptx.append(self.ptx)
             self.ax.plot(cx, cy, marker='^', color=bs_colors[idx % len(bs_colors)],
                          markersize=5, zorder=6)
+            self.ax.text(
+                cx + 18,
+                cy + 18,
+                str(idx),
+                fontsize=7,
+                color='black',
+                ha='left',
+                va='bottom',
+                zorder=8
+            )
 
             # Hex boundary.
             size = self.scale_factor
@@ -272,7 +284,7 @@ class CellularNetworkReceivedPower:
         else:
             self.height_ax.set_xticks([])
 
-    def update_bs_power_table(self, ue_idx: int = 0, serving_bs=None, serving_prx=None, neighbors=None):
+    def update_bs_power_table(self, ue_idx: int = 0, serving_bs=None, serving_rsrp=None, neighbors=None):
         self.bs_table_ax.clear()
         self.bs_table_ax.axis('off')
         self.bs_table_ax.text(
@@ -287,25 +299,25 @@ class CellularNetworkReceivedPower:
         )
 
         rows = []
-        if serving_bs is not None and serving_prx is not None:
-            rows.append((int(serving_bs), float(serving_prx), True))
+        if serving_bs is not None and serving_rsrp is not None:
+            rows.append((int(serving_bs), float(serving_rsrp), True))
 
         if neighbors:
-            for bs_idx, prx in neighbors[:6]:
+            for bs_idx, rsrp in neighbors[:6]:
                 if serving_bs is not None and int(bs_idx) == int(serving_bs):
                     continue
-                rows.append((int(bs_idx), float(prx), False))
+                rows.append((int(bs_idx), float(rsrp), False))
 
         rows = sorted(rows[:7], key=lambda row: row[1], reverse=True)
         self.bs_power_table_rows = rows
 
-        cell_text = [[str(bs_idx), f'{prx:.2f}'] for bs_idx, prx, _ in rows]
+        cell_text = [[str(bs_idx), f'{rsrp:.2f}'] for bs_idx, rsrp, _ in rows]
         while len(cell_text) < 7:
             cell_text.append(['-', '-'])
 
         table = self.bs_table_ax.table(
             cellText=cell_text,
-            colLabels=['BS index', 'Rx power (dBm)'],
+            colLabels=['BS index', 'RSRP (dBm)'],
             bbox=[0.0, 0.0, 1.0, 0.88],
             cellLoc='center',
             colLoc='center',
@@ -328,12 +340,12 @@ class CellularNetworkReceivedPower:
         self.bs_power_table = table
 
     @staticmethod
-    def link_quality_color(prx_dbm):
-        if prx_dbm is None:
+    def link_quality_color(signal_dbm):
+        if signal_dbm is None:
             return '#8c8c8c'
-        if float(prx_dbm) > -70.0:
+        if float(signal_dbm) > -70.0:
             return '#2ca02c'
-        if float(prx_dbm) >= -90.0:
+        if float(signal_dbm) >= -90.0:
             return '#ffbf00'
         return '#d62728'
 
@@ -343,6 +355,7 @@ class CellularNetworkReceivedPower:
         x=None,
         y=None,
         serving_bs=None,
+        rsrp_dbm=None,
         prx_dbm=None,
         los_state=None,
         handover_count=None,
@@ -356,18 +369,21 @@ class CellularNetworkReceivedPower:
                 f"UE index: {ue_idx}\n"
                 "x, y: -\n"
                 "Connected BS: -\n"
+                "RSRP: -\n"
                 "Rx power: -\n"
                 "LOS/NLOS: -\n"
                 "Handover: 0\n"
                 "Speed: -"
             )
         else:
+            rsrp_text = f"{float(rsrp_dbm):.2f} dBm" if rsrp_dbm is not None else "-"
             prx_text = f"{float(prx_dbm):.2f} dBm" if prx_dbm is not None else "-"
             speed_text = f"{float(speed_kmh):.2f} km/h" if speed_kmh is not None else "-"
             text = (
                 f"UE index: {ue_idx}\n"
                 f"x, y: {float(x):.1f}, {float(y):.1f}\n"
                 f"Connected BS: {serving_bs if serving_bs is not None else '-'}\n"
+                f"RSRP: {rsrp_text}\n"
                 f"Rx power: {prx_text}\n"
                 f"\nLOS/NLOS: {los_state if los_state is not None else '-'}\n"
                 f"Handover: {handover_count if handover_count is not None else 0}\n"
@@ -477,7 +493,7 @@ class CellularNetworkReceivedPower:
             x, y = self.ue_positions[ue_idx]
             self.ue_points[ue_idx].set_data([x], [y])
 
-            bs, prx_avg, dist, neighbors = self.radio_model.get_serving_bs(x, y, ue_idx)
+            bs, serving_rsrp, dist, neighbors = self.radio_model.get_serving_bs(x, y, ue_idx)
 
             if bs is not None and self.show_link_lines:
                 self.ue_lines[ue_idx].set_data([x, self.bs_positions[bs][0]],
@@ -489,13 +505,14 @@ class CellularNetworkReceivedPower:
                 pl_base, los, los_probability = self.radio_model.calculate_path_loss(x, y, bs, ue_idx)
                 los_state = 'LOS' if los else 'NLOS'
                 sf_db = self.radio_model.shadow_fading(ue_idx, bs, los, (x, y))
-                prx_inst = self.radio_model.calculate_received_power(bs, pl_base + sf_db)
+                prx_inst = self.radio_model.calculate_total_received_power(bs, pl_base + sf_db)
                 sinr = self.radio_model.calculate_sinr(ue_idx, bs, prx_inst)
             else:
                 los_probability = None
                 los_state = None
                 pl_base = None
                 sf_db = None
+                serving_rsrp = None
                 prx_inst = None
                 sinr = None
 
@@ -505,14 +522,15 @@ class CellularNetworkReceivedPower:
                 self.ue_handover_count[ue_idx] += 1
             self.previous_serving_bs[ue_idx] = bs
 
-            link_color = self.link_quality_color(prx_inst)
+            link_color = self.link_quality_color(serving_rsrp)
             self.ue_points[ue_idx].set_color(link_color)
             self.ue_points[ue_idx].set_markeredgecolor('black')
             self.ue_points[ue_idx].set_markeredgewidth(0.4)
             self.ue_lines[ue_idx].set_color(link_color)
 
             self.logger.log_ue_data(
-                ue_idx, x, y, bs, prx_inst, sinr, handover_flag, neighbors,
+                ue_idx, x, y, bs, sinr, handover_flag, neighbors,
+                rsrp_dbm=serving_rsrp,
                 los_probability=los_probability,
                 los_state=los_state,
                 pathloss_db=pl_base,
@@ -525,12 +543,13 @@ class CellularNetworkReceivedPower:
                     x,
                     y,
                     bs,
+                    serving_rsrp,
                     prx_inst,
                     los_state,
                     self.ue_handover_count[ue_idx],
                     float(self.ue_speeds[ue_idx] * self.ue_speed_factor[ue_idx]),
                 )
-                self.update_bs_power_table(ue_idx, bs, prx_inst, neighbors)
+                self.update_bs_power_table(ue_idx, bs, serving_rsrp, neighbors)
 
         self.time_text.set_text(f'Step: {frame}')
         self.fig.canvas.draw()

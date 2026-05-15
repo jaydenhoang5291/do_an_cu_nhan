@@ -16,11 +16,11 @@ class SimulationLogger:
         for i in range(self.sim.num_ues):
             keys = [
                 'x', 'y', 'height', 'direction', 'connected_bs', 'los_probability',
-                'los_state', 'pathloss', 'shadow_fading', 'current_prx', 'sinr',
+                'los_state', 'pathloss', 'shadow_fading', 'rsrp', 'sinr',
                 'speed', 'handover'
             ]
             for j in range(5):
-                keys.extend([f'bs{j + 1}_idx', f'bs{j + 1}_prx'])
+                keys.extend([f'bs{j + 1}_idx', f'bs{j + 1}_rsrp'])
             for key in keys:
                 self.sim.data_log[f'ue{i}_{key}'] = []
 
@@ -28,8 +28,9 @@ class SimulationLogger:
         self.sim.data_log['Step'].append(frame)
 
     def log_ue_data(
-        self, ue_idx, x, y, bs, prx_inst, sinr, handover_flag, neighbors=None,
-        los_probability=None, los_state=None, pathloss_db=None, shadow_fading_db=None
+        self, ue_idx, x, y, bs, sinr, handover_flag, neighbors=None,
+        rsrp_dbm=None, los_probability=None, los_state=None, pathloss_db=None,
+        shadow_fading_db=None
     ):
         self.sim.data_log[f'ue{ue_idx}_x'].append(x)
         self.sim.data_log[f'ue{ue_idx}_y'].append(y)
@@ -40,7 +41,7 @@ class SimulationLogger:
         self.sim.data_log[f'ue{ue_idx}_los_state'].append(los_state)
         self.sim.data_log[f'ue{ue_idx}_pathloss'].append(pathloss_db)
         self.sim.data_log[f'ue{ue_idx}_shadow_fading'].append(shadow_fading_db)
-        self.sim.data_log[f'ue{ue_idx}_current_prx'].append(prx_inst)
+        self.sim.data_log[f'ue{ue_idx}_rsrp'].append(rsrp_dbm)
         self.sim.data_log[f'ue{ue_idx}_sinr'].append(sinr)
         self.sim.data_log[f'ue{ue_idx}_speed'].append(float(self.sim.ue_speeds[ue_idx] * self.sim.ue_speed_factor[ue_idx]))
         self.sim.data_log[f'ue{ue_idx}_handover'].append(handover_flag)
@@ -49,13 +50,13 @@ class SimulationLogger:
             neighbors = []
         for j in range(5):
             idx_key = f'ue{ue_idx}_bs{j+1}_idx'
-            prx_key = f'ue{ue_idx}_bs{j+1}_prx'
+            rsrp_key = f'ue{ue_idx}_bs{j+1}_rsrp'
             if j < len(neighbors):
                 self.sim.data_log[idx_key].append(neighbors[j][0])
-                self.sim.data_log[prx_key].append(neighbors[j][1])
+                self.sim.data_log[rsrp_key].append(neighbors[j][1])
             else:
                 self.sim.data_log[idx_key].append(None)
-                self.sim.data_log[prx_key].append(None)
+                self.sim.data_log[rsrp_key].append(None)
 
     def save_data_to_csv(self):
         os.makedirs("data", exist_ok=True)
@@ -67,7 +68,7 @@ class SimulationLogger:
         df = pd.DataFrame(self.sim.data_log)
 
         for col in df.columns:
-            if any(tag in col for tag in ['prx', '_x', '_y', 'los_probability', 'pathloss', 'shadow_fading', 'SINR']):
+            if any(tag in col for tag in ['rsrp', '_x', '_y', 'los_probability', 'pathloss', 'shadow_fading', 'SINR']):
                 df[col] = pd.to_numeric(df[col], errors='coerce').round(2)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

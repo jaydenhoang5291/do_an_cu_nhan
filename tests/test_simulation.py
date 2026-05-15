@@ -1,5 +1,6 @@
 import unittest
 from unittest.mock import patch
+import math
 
 import matplotlib
 
@@ -69,8 +70,45 @@ class SimulationBSTests(unittest.TestCase):
 
         self.assertEqual(len(sim.bs_power_table_rows), 7)
         self.assertTrue(any(row[2] for row in sim.bs_power_table_rows))
-        prx_values = [row[1] for row in sim.bs_power_table_rows]
-        self.assertEqual(prx_values, sorted(prx_values, reverse=True))
+        rsrp_values = [row[1] for row in sim.bs_power_table_rows]
+        self.assertEqual(rsrp_values, sorted(rsrp_values, reverse=True))
+
+    def test_rsrp_from_received_power_uses_lte_10mhz_approximation(self):
+        sim = CellularNetworkReceivedPower(
+            num_ues=1,
+            rect_len_m=1000.0,
+            rect_wid_m=1000.0,
+            fast_mode=True,
+            show_link_lines=False,
+            seed=1,
+        )
+
+        prx_dbm = config.PTX
+        expected = prx_dbm - 10.0 * math.log10(
+            config.LTE_N_RB * config.LTE_N_SUBCARRIERS_PER_RB
+        )
+
+        self.assertAlmostEqual(sim.radio_model.calculate_rsrp_from_received_power(prx_dbm), expected)
+        self.assertAlmostEqual(expected, 18.22, places=2)
+
+    def test_rsrp_is_lower_than_total_received_power_by_resource_grid_factor(self):
+        sim = CellularNetworkReceivedPower(
+            num_ues=1,
+            rect_len_m=1000.0,
+            rect_wid_m=1000.0,
+            fast_mode=True,
+            show_link_lines=False,
+            seed=1,
+        )
+
+        path_loss_db = 100.0
+        prx = sim.radio_model.calculate_total_received_power(0, path_loss_db)
+        rsrp = sim.radio_model.calculate_rsrp(0, path_loss_db)
+        expected_delta = 10.0 * math.log10(
+            config.LTE_N_RB * config.LTE_N_SUBCARRIERS_PER_RB
+        )
+
+        self.assertAlmostEqual(prx - rsrp, expected_delta)
 
     def test_link_quality_color_thresholds(self):
         self.assertEqual(CellularNetworkReceivedPower.link_quality_color(-69.9), '#2ca02c')

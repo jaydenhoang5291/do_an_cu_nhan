@@ -7,11 +7,20 @@ including radio parameters, handover, stop-and-go mobility, and noise.
 # Based on 3GPP TR 36.777 Table A.1-1
 PTX = 46.0       # Power Transmit of Base Station (dBm)
 GTX = 2.0        # Gain Transmit
-GRX = 2.0        # Gain Receive
+GRX = 0.0        # Gain Receive
 
 SENSITIVITY = -110.0
 FC = 2.0  # GHz
+
+
 HOM = 3.0
+
+# Downlink resource grid assumptions for system-level RSRP approximation
+# Based on 3GPP TS 36.104 Table 5.6-1 for 10 MHz bandwidth
+LTE_N_RB = 50
+# Based on 3GPP TS 36.101 Table 6.2.3-1
+LTE_N_SUBCARRIERS_PER_RB = 12
+
 
 MAX_BS_RANGE = 600.0
 MAX_CANDIDATE_BS = 6

@@ -12,7 +12,6 @@ GRX = 0.0        # Gain Receive
 SENSITIVITY = -110.0
 FC = 2.0  # GHz
 
-
 HOM = 3.0
 
 # Downlink resource grid assumptions for system-level RSRP approximation

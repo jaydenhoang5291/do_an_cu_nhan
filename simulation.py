@@ -54,14 +54,12 @@ class CellularNetworkReceivedPower:
 
         # Radio params
         self.ptx, self.gtx, self.grx = config.PTX, config.GTX, config.GRX
-        self.sensitivity = config.SENSITIVITY
         self.fc = config.FC
         self.hom = config.HOM
         self.lte_n_rb = config.LTE_N_RB
         self.lte_n_subcarriers_per_rb = config.LTE_N_SUBCARRIERS_PER_RB
-
-        self.max_bs_range = config.MAX_BS_RANGE
-        self.max_candidate_bs = config.MAX_CANDIDATE_BS
+        self.bandwidth = config.BANDWIDTH
+        self.ue_noise_figure = config.UE_NOISE_FIGURE
 
         self.h_bs, self.h_ut = config.H_BS, config.H_UT
         self.ue_height_m = self._validate_ue_height(ue_height_m)
@@ -357,6 +355,7 @@ class CellularNetworkReceivedPower:
         serving_bs=None,
         rsrp_dbm=None,
         prx_dbm=None,
+        sinr_db=None,
         los_state=None,
         handover_count=None,
         speed_kmh=None,
@@ -371,6 +370,7 @@ class CellularNetworkReceivedPower:
                 "Connected BS: -\n"
                 "RSRP: -\n"
                 "Rx power: -\n"
+                "SINR: -\n"
                 "LOS/NLOS: -\n"
                 "Handover: 0\n"
                 "Speed: -"
@@ -378,6 +378,7 @@ class CellularNetworkReceivedPower:
         else:
             rsrp_text = f"{float(rsrp_dbm):.2f} dBm" if rsrp_dbm is not None else "-"
             prx_text = f"{float(prx_dbm):.2f} dBm" if prx_dbm is not None else "-"
+            sinr_text = f"{float(sinr_db):.2f} dB" if sinr_db is not None else "-"
             speed_text = f"{float(speed_kmh):.2f} km/h" if speed_kmh is not None else "-"
             text = (
                 f"UE index: {ue_idx}\n"
@@ -385,7 +386,8 @@ class CellularNetworkReceivedPower:
                 f"Connected BS: {serving_bs if serving_bs is not None else '-'}\n"
                 f"RSRP: {rsrp_text}\n"
                 f"Rx power: {prx_text}\n"
-                f"\nLOS/NLOS: {los_state if los_state is not None else '-'}\n"
+                f"SINR: {sinr_text}\n"
+                f"LOS/NLOS: {los_state if los_state is not None else '-'}\n"
                 f"Handover: {handover_count if handover_count is not None else 0}\n"
                 f"Speed: {speed_text}"
             )
@@ -531,6 +533,7 @@ class CellularNetworkReceivedPower:
             self.logger.log_ue_data(
                 ue_idx, x, y, bs, sinr, handover_flag, neighbors,
                 rsrp_dbm=serving_rsrp,
+                prx_dbm=prx_inst,
                 los_probability=los_probability,
                 los_state=los_state,
                 pathloss_db=pl_base,
@@ -545,6 +548,7 @@ class CellularNetworkReceivedPower:
                     bs,
                     serving_rsrp,
                     prx_inst,
+                    sinr,
                     los_state,
                     self.ue_handover_count[ue_idx],
                     float(self.ue_speeds[ue_idx] * self.ue_speed_factor[ue_idx]),

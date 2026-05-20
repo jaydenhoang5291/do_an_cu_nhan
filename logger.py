@@ -16,10 +16,10 @@ class SimulationLogger:
         for i in range(self.sim.num_ues):
             keys = [
                 'x', 'y', 'height', 'direction', 'connected_bs', 'los_probability',
-                'los_state', 'pathloss', 'shadow_fading', 'rsrp', 'sinr',
+                'los_state', 'pathloss', 'shadow_fading', 'rsrp', 'prx', 'sinr',
                 'speed', 'handover'
             ]
-            for j in range(5):
+            for j in range(6):
                 keys.extend([f'bs{j + 1}_idx', f'bs{j + 1}_rsrp'])
             for key in keys:
                 self.sim.data_log[f'ue{i}_{key}'] = []
@@ -29,8 +29,8 @@ class SimulationLogger:
 
     def log_ue_data(
         self, ue_idx, x, y, bs, sinr, handover_flag, neighbors=None,
-        rsrp_dbm=None, los_probability=None, los_state=None, pathloss_db=None,
-        shadow_fading_db=None
+        rsrp_dbm=None, prx_dbm=None, los_probability=None,
+        los_state=None, pathloss_db=None, shadow_fading_db=None
     ):
         self.sim.data_log[f'ue{ue_idx}_x'].append(x)
         self.sim.data_log[f'ue{ue_idx}_y'].append(y)
@@ -42,13 +42,14 @@ class SimulationLogger:
         self.sim.data_log[f'ue{ue_idx}_pathloss'].append(pathloss_db)
         self.sim.data_log[f'ue{ue_idx}_shadow_fading'].append(shadow_fading_db)
         self.sim.data_log[f'ue{ue_idx}_rsrp'].append(rsrp_dbm)
+        self.sim.data_log[f'ue{ue_idx}_prx'].append(prx_dbm)
         self.sim.data_log[f'ue{ue_idx}_sinr'].append(sinr)
         self.sim.data_log[f'ue{ue_idx}_speed'].append(float(self.sim.ue_speeds[ue_idx] * self.sim.ue_speed_factor[ue_idx]))
         self.sim.data_log[f'ue{ue_idx}_handover'].append(handover_flag)
         
         if neighbors is None:
             neighbors = []
-        for j in range(5):
+        for j in range(6):
             idx_key = f'ue{ue_idx}_bs{j+1}_idx'
             rsrp_key = f'ue{ue_idx}_bs{j+1}_rsrp'
             if j < len(neighbors):
@@ -68,7 +69,7 @@ class SimulationLogger:
         df = pd.DataFrame(self.sim.data_log)
 
         for col in df.columns:
-            if any(tag in col for tag in ['rsrp', '_x', '_y', 'los_probability', 'pathloss', 'shadow_fading', 'SINR']):
+            if any(tag in col for tag in ['rsrp', 'prx', 'sinr', '_x', '_y', 'los_probability', 'pathloss', 'shadow_fading']):
                 df[col] = pd.to_numeric(df[col], errors='coerce').round(2)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

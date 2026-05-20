@@ -8,9 +8,14 @@ including radio parameters, handover, stop-and-go mobility, and noise.
 PTX = 46.0       # Power Transmit of Base Station (dBm)
 GTX = 2.0        # Gain Transmit
 GRX = 0.0        # Gain Receive
-
-SENSITIVITY = -110.0
 FC = 2.0  # GHz
+BANDWIDTH = 10e6          # Hz
+
+# Thermal noise model for SINR.
+# The receiver noise is independent of the current received signal power
+# It is computed from the standard noise density -174 dBm/Hz:
+# N_dBm = -174 + 10*log10(B_Hz) + NF_dB
+UE_NOISE_FIGURE = 9.0    # dB
 
 HOM = 3.0
 
@@ -19,10 +24,6 @@ HOM = 3.0
 LTE_N_RB = 50
 # Based on 3GPP TS 36.101 Table 6.2.3-1
 LTE_N_SUBCARRIERS_PER_RB = 12
-
-
-MAX_BS_RANGE = 600.0
-MAX_CANDIDATE_BS = 6
 
 H_BS = 25.0     # Height of BS_ground (m)
 H_UT = 1.5      # Height of UE_ground (m)
@@ -41,6 +42,3 @@ RAMP_DURATION_STEPS = 2
 # Output sampling
 SIMULATION_STEPS = 300
 TIME_PER_STEP_S = 1.0
-
-# Noise power
-N_DBM = -100.0

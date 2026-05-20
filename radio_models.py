@@ -262,41 +262,70 @@ class RadioModel:
         prx_dbm = self.calculate_total_received_power(bs_idx, path_loss_db)
         return self.calculate_rsrp_from_received_power(prx_dbm)
 
+    def thermal_noise_power_dbm(self) -> float:
+        bandwidth = float(self.sim.bandwidth)              # Hz
+        noise_figure = float(self.sim.ue_noise_figure)    # dB
+        if bandwidth <= 0.0:
+            raise ValueError("Bandwidth must be positive to calculate thermal noise")
+
+        # Thermal noise is a receiver/bandwidth property, not a function of Prx.
+        # -174 dBm/Hz is the thermal noise density at room temperature.
+        return float(-174.0 + 10.0 * np.log10(bandwidth) + noise_figure)
+
+    def get_interfering_bs_indices(self, serving_bs_idx: int, count: int = 6) -> list[int]:
+        serving_x, serving_y = self.sim.bs_positions[serving_bs_idx]
+        neighbors = []
+
+        for bs_idx, (bs_x, bs_y) in enumerate(self.sim.bs_positions):
+            if bs_idx == serving_bs_idx:
+                continue
+
+            # In the hexagonal layout, the six nearest BSs around the serving
+            # BS approximate the first-tier co-channel interference cells.
+            distance = float(np.hypot(float(bs_x) - serving_x, float(bs_y) - serving_y))
+            neighbors.append((bs_idx, distance))
+
+        neighbors.sort(key=lambda item: item[1])
+        return [bs_idx for bs_idx, _ in neighbors[:count]]
+
+    def calculate_interference_power_mw(self, ue_idx: int, serving_bs_idx: int) -> float:
+        interference_mw = 0.0
+        ue_x, ue_y = self.sim.ue_positions[ue_idx]
+
+        for interferer_bs_idx in self.get_interfering_bs_indices(serving_bs_idx):
+            # Interference is the received power at this UE from the first-tier
+            # neighboring BSs around the serving BS, assuming they transmit on
+            # the same downlink time/frequency resource.
+            pl, los_i, _ = self.calculate_path_loss(ue_x, ue_y, interferer_bs_idx, ue_idx)
+            sf_i = self.shadow_fading(ue_idx, interferer_bs_idx, los_i, (ue_x, ue_y))
+            interfering_prx_dbm = self.calculate_total_received_power(
+                interferer_bs_idx,
+                pl + sf_i,
+            )
+            interference_mw += 10.0 ** (interfering_prx_dbm / 10.0)
+
+        return float(interference_mw)
+
+    def calculate_sinr(self, ue_idx, serving_bs_idx, prx_dbm) -> float:
+        # SINR_i = P_rx,i / (sum_{j != i} P_rx,j + N)
+        # All powers must be converted from dBm to mW before summing/dividing.
+        signal_mw = 10.0 ** (float(prx_dbm) / 10.0)
+        interference_mw = self.calculate_interference_power_mw(ue_idx, serving_bs_idx)
+        noise_mw = 10.0 ** (self.thermal_noise_power_dbm() / 10.0)
+
+        sinr_lin = signal_mw / (interference_mw + noise_mw)
+        sinr_db = 10.0 * np.log10(sinr_lin) if sinr_lin > 0 else -np.inf
+        return float(sinr_db)
+    
     def get_serving_bs(self, ue_x, ue_y, ue_idx):
         neighbor_count = 6
-        candidate_target = max(neighbor_count + 1, int(self.sim.max_candidate_bs))
-        dist_list_all = []
-        dist_list = []
-        for i, _ in enumerate(self.sim.bs_positions):
-            d2D, d3D = self.calculate_distances(ue_x, ue_y, i, ue_idx)
-            dist_list_all.append((i, d3D))
-            if self.sim.max_bs_range is not None:
-                if d2D > self.sim.max_bs_range:
-                    continue
-            dist_list.append((i, d3D))
+        candidate_indices = list(range(len(self.sim.bs_positions)))
 
-        if not dist_list:
-            dist_list = list(dist_list_all)
-            if not dist_list:
-                self.sim.ue_serving_bs[ue_idx] = None
-                return None, None, None, []
-
-        dist_list_all.sort(key=lambda x: x[1])
-        dist_list.sort(key=lambda x: x[1])
-        candidate_indices = [i for i, _ in dist_list[:max(1, candidate_target)]]
-
-        # Fill short in-range candidate lists with nearest out-of-range BSs so
-        # ranking views can still report enough non-serving BSs when available.
-        for i, _ in dist_list_all:
-            if len(candidate_indices) >= max(1, candidate_target):
-                break
-            if i not in candidate_indices:
-                candidate_indices.append(i)
+        if not candidate_indices:
+            self.sim.ue_serving_bs[ue_idx] = None
+            return None, None, None, []
 
         current_bs = self.sim.ue_serving_bs[ue_idx]
-        if current_bs is not None and current_bs not in candidate_indices:
-            candidate_indices.append(current_bs)
-
         cand = []
         for i in candidate_indices:
             pl_base, los_i, _ = self.calculate_path_loss(ue_x, ue_y, i, ue_idx)
@@ -336,20 +365,3 @@ class RadioModel:
                 return bs_idx, float(bs_rsrp), float(bs_d), get_neighbors(bs_idx)
 
         return current_bs, cur_rsrp, cur_d, get_neighbors(current_bs)
-
-    def calculate_sinr(self, ue_idx, serving_bs_idx, prx_dbm):
-        N_mw = 10 ** (config.N_DBM / 10.0)
-        interf = 0.0
-        ue_x, ue_y = self.sim.ue_positions[ue_idx]
-        for i, (bs_x, bs_y) in enumerate(self.sim.bs_positions):
-            if i == serving_bs_idx:
-                continue
-            pl, los_i, _ = self.calculate_path_loss(ue_x, ue_y, i, ue_idx)
-            sf_i = self.shadow_fading(ue_idx, i, los_i, (ue_x, ue_y))
-            prx_i = self.calculate_total_received_power(i, pl + sf_i)
-            if prx_i >= self.sim.sensitivity:
-                interf += 10 ** (prx_i / 10.0)
-        prx_mw = 10 ** (prx_dbm / 10.0)
-        sinr_lin = prx_mw / (interf + N_mw)
-        sinr_db = 10.0 * np.log10(sinr_lin) if sinr_lin > 0 else -np.inf
-        return float(sinr_db)

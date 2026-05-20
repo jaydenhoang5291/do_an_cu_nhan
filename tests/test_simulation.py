@@ -73,6 +73,35 @@ class SimulationBSTests(unittest.TestCase):
         rsrp_values = [row[1] for row in sim.bs_power_table_rows]
         self.assertEqual(rsrp_values, sorted(rsrp_values, reverse=True))
 
+    def test_interference_uses_six_nearest_bs_around_serving_bs(self):
+        sim = CellularNetworkReceivedPower(
+            num_ues=1,
+            rect_len_m=2000.0,
+            rect_wid_m=2000.0,
+            fast_mode=True,
+            show_link_lines=False,
+            seed=1,
+        )
+
+        serving_bs = len(sim.bs_positions) // 2
+        sx, sy = sim.bs_positions[serving_bs]
+        expected = sorted(
+            (
+                (
+                    bs_idx,
+                    math.hypot(bs_x - sx, bs_y - sy),
+                )
+                for bs_idx, (bs_x, bs_y) in enumerate(sim.bs_positions)
+                if bs_idx != serving_bs
+            ),
+            key=lambda item: item[1],
+        )[:6]
+
+        self.assertEqual(
+            sim.radio_model.get_interfering_bs_indices(serving_bs),
+            [bs_idx for bs_idx, _ in expected],
+        )
+
     def test_rsrp_from_received_power_uses_lte_10mhz_approximation(self):
         sim = CellularNetworkReceivedPower(
             num_ues=1,

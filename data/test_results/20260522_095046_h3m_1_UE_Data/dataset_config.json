@@ -1,0 +1,9 @@
+{
+  "csv_path": "data\\simulation_logs\\20260522_095046_h3m_1_UE_Data.csv",
+  "train_csv_path": "D:\\HUST\\20252_ĐATN\\Code\\data\\simulation_logs\\20260522_092503_h1p5m_1_UE_Data.csv",
+  "history_len": 10,
+  "horizon": 1,
+  "n_features": 16,
+  "n_targets": 1,
+  "n_test_samples": 1990
+}

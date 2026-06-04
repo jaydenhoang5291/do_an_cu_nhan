@@ -10,7 +10,9 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error
 PACKAGE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = PACKAGE_DIR.parent
 RAW_DATA_PATH = PROJECT_ROOT / "data" / "raw" / "simulation_log.csv"
+SIMULATION_LOGS_DIR = PROJECT_ROOT / "data" / "simulation_logs"
 PROCESSED_DIR = PROJECT_ROOT / "data" / "processed"
+TEST_RESULTS_DIR = PROJECT_ROOT / "data" / "test_results"
 MODELS_DIR = PROJECT_ROOT / "models"
 
 
@@ -19,7 +21,9 @@ def display_path(path: Path) -> str:
 
 
 def ensure_output_dirs() -> None:
+    SIMULATION_LOGS_DIR.mkdir(parents=True, exist_ok=True)
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    TEST_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 

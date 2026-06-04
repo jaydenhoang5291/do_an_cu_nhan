@@ -1,19 +1,19 @@
 # Local SINR Prediction Pipeline
 
-This folder adds a small supervised regression pipeline for predicting future SINR at `t + horizon` from past simulator logs. It does not modify the existing simulator code.
+This folder adds a small supervised regression pipeline for predicting next-step SINR at `t + horizon` from past simulator logs.
 
 ## Expected Input
 
 By default, the dataset builder uses the newest simulator CSV matching:
 
 ```bash
-data/*_UE_Data.csv
+data/simulation_logs/*_UE_Data.csv
 ```
 
 You can also pass an explicit file:
 
 ```bash
-python -m ml_sinr_prediction.build_dataset --csv data/20260520_112557_1_UE_Data.csv
+python -m ml_sinr_prediction.build_dataset --csv data/simulation_logs/20260520_112557_1_UE_Data.csv
 ```
 
 The legacy raw-data path is:
@@ -22,14 +22,16 @@ The legacy raw-data path is:
 data/raw/simulation_log.csv
 ```
 
-The dataset builder automatically uses these feature columns when present:
+The dataset builder automatically uses a focused feature set when present:
 
-- simulator columns such as `ue0_x`, `ue0_y`, `ue0_height`, `ue0_rsrp`, `ue0_prx`, `ue0_sinr`, and `ue0_bs*_rsrp`
+- simulator columns such as `ue0_x`, `ue0_y`, `ue0_height`, `ue0_direction`, `ue0_connected_bs`, `ue0_los_probability`, `ue0_pathloss`, `ue0_shadow_fading`, `ue0_rsrp`, `ue0_sinr`, and `ue0_bs*_rsrp`
 - `x`, `y`, `z`, `vx`, `vy`, `vz`
 - columns starting with `rsrp_bs_`
 - columns starting with `sinr_bs_`
 
 Targets are simulator SINR columns such as `ue0_sinr`, or legacy columns starting with `sinr_bs_`, shifted by `horizon`.
+
+Simulator columns such as `prx`, `speed`, `handover`, `los_state`, and neighbor BS indices are intentionally not used as default ML inputs because they are redundant, fixed per UE after initialization, categorical text, or weakly causal for next-step SINR.
 
 Optional columns:
 
@@ -46,6 +48,22 @@ python -m ml_sinr_prediction.generate_dummy_simulation_log
 
 This is dummy data only. Do not use it as research results.
 
+## Long Training Log
+
+To create a longer real simulator log without waiting for the animation window:
+
+```bash
+python -m ml_sinr_prediction.generate_training_log
+```
+
+Run it without arguments to enter the same core simulator parameters as `main.py`, plus the number of CSV rows to generate. For automated runs, pass arguments directly:
+
+```bash
+python -m ml_sinr_prediction.generate_training_log --rows 3000 --num-ues 1
+```
+
+The generated CSV is saved in `data/simulation_logs/` and can then be used by the dataset builder.
+
 ## Run From VS Code Terminal
 
 From the project root:
@@ -56,6 +74,12 @@ python -m ml_sinr_prediction.train_persistence
 python -m ml_sinr_prediction.train_linear_regression
 python -m ml_sinr_prediction.train_random_forest
 python -m ml_sinr_prediction.evaluate_models
+```
+
+To test a different simulator CSV with the already trained models, without rebuilding or retraining:
+
+```bash
+python -m ml_sinr_prediction.evaluate_on_csv --csv data/simulation_logs/NEW_FILE.csv
 ```
 
 Predict one sample with a trained model:
@@ -79,6 +103,19 @@ data/processed/dataset_config.json
 data/processed/model_results.csv
 ```
 
+Each `evaluate_models` or `evaluate_on_csv` run also creates a per-dataset test bundle:
+
+```bash
+data/test_results/<dataset_name>/model_results.csv
+data/test_results/<dataset_name>/model_predictions.csv
+data/test_results/<dataset_name>/prediction_plot_linear_regression_ue0_sinr.png
+data/test_results/<dataset_name>/prediction_plot_random_forest_ue0_sinr.png
+data/test_results/<dataset_name>/error_histogram_linear_regression_ue0_sinr.png
+data/test_results/<dataset_name>/error_histogram_random_forest_ue0_sinr.png
+data/test_results/<dataset_name>/parity_plot_linear_regression_ue0_sinr.png
+data/test_results/<dataset_name>/parity_plot_random_forest_ue0_sinr.png
+```
+
 Trained models:
 
 ```bash
@@ -91,7 +128,7 @@ models/random_forest.joblib
 Defaults:
 
 - `history_len = 10`
-- `horizon = 10`
+- `horizon = 1`
 - `test_size = 0.2`
 
 Override them when building:

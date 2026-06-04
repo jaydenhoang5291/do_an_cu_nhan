@@ -41,14 +41,16 @@ def main() -> None:
 
     best_pred_idx = int(y_pred.argmax())
     best_actual_idx = int(y_actual.argmax())
+    y_pred_display = [round(float(value), 2) for value in y_pred]
+    y_actual_display = [round(float(value), 2) for value in y_actual]
 
     print(f"Model: {display_path(model_path)}")
     print(f"Sample index: {args.sample_index}")
     print(f"Target columns: {target_cols}")
-    print(f"Predicted SINR vector: {y_pred.tolist()}")
-    print(f"Actual SINR vector: {y_actual.tolist()}")
-    print(f"Best predicted cell: {target_cols[best_pred_idx]} ({y_pred[best_pred_idx]:.4f})")
-    print(f"Best actual cell: {target_cols[best_actual_idx]} ({y_actual[best_actual_idx]:.4f})")
+    print(f"Predicted SINR vector: {y_pred_display}")
+    print(f"Actual SINR vector: {y_actual_display}")
+    print(f"Best predicted cell: {target_cols[best_pred_idx]} ({y_pred[best_pred_idx]:.2f})")
+    print(f"Best actual cell: {target_cols[best_actual_idx]} ({y_actual[best_actual_idx]:.2f})")
 
 
 if __name__ == "__main__":

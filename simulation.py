@@ -28,6 +28,10 @@ class CellularNetworkReceivedPower:
         fast_mode: bool = True,
         show_link_lines: bool = True,
         seed: int | None = None,
+        ue_speed_kmh: float | None = None,
+        enable_stop_and_go: bool | None = None,
+        simulation_steps: int | None = None,
+        enable_plot: bool = True,
     ):
         if seed is not None:
             np.random.seed(int(seed))
@@ -72,7 +76,14 @@ class CellularNetworkReceivedPower:
         # UE
         self.num_ues = int(num_ues)
         self.ue_colors = ['green', 'purple', 'orange', 'cyan', 'magenta', 'yellow', 'black']
-        self.ue_speeds = np.random.uniform(20.0, 60.0, self.num_ues)  # km/h
+        if ue_speed_kmh is None:
+            self.ue_speeds = np.random.uniform(
+                float(config.UE_SPEED_MIN_KMH),
+                float(config.UE_SPEED_MAX_KMH),
+                self.num_ues,
+            )
+        else:
+            self.ue_speeds = np.full(self.num_ues, float(ue_speed_kmh), dtype=float)
         self.ue_speeds_ms = self.ue_speeds * (1000.0 / 3600.0)
         self.ue_heights_m = np.full(self.num_ues, self.ue_height_m, dtype=float)
         self.aerial_ues = [
@@ -80,10 +91,11 @@ class CellularNetworkReceivedPower:
             for i in range(self.num_ues)
         ] if self.is_aerial_ue else []
 
-        self.steps = int(config.SIMULATION_STEPS)
+        self.steps = int(config.SIMULATION_STEPS if simulation_steps is None else simulation_steps)
         self.time_per_step = float(config.TIME_PER_STEP_S)
         self.pause_s = (0.03 if fast_mode else 0.08)
         self.show_link_lines = bool(show_link_lines)
+        self.enable_plot = bool(enable_plot)
 
         # BS hex layout
         self.scale_factor = 500.0
@@ -98,6 +110,9 @@ class CellularNetworkReceivedPower:
         self.ue_handover_count = [0] * self.num_ues
 
         # UE stop-and-go after turns:
+        self.enable_stop_and_go = bool(
+            config.ENABLE_STOP_AND_GO if enable_stop_and_go is None else enable_stop_and_go
+        )
         self.turns_before_stop = config.TURNS_BEFORE_STOP
         self.stop_duration_steps = config.STOP_DURATION_STEPS
         self.ramp_duration_steps = config.RAMP_DURATION_STEPS
@@ -108,7 +123,29 @@ class CellularNetworkReceivedPower:
         self.ue_ramp_step = [-1] * self.num_ues
         self.ue_speed_factor = np.ones(self.num_ues, dtype=float)
 
-        # UI + plot
+        self.animation_running = True
+        self._setup_base_stations()
+
+        # Logging
+        self.logger.setup_log()
+
+        if self.enable_plot:
+            self._setup_plot_window()
+            self.setup_plot()
+        self.setup_ues()
+
+    def _setup_base_stations(self):
+        self.bs_positions.clear()
+        self.bs_heights.clear()
+        self.bs_ptx.clear()
+
+        for hex_obj in self.hexes:
+            x, y = axial_to_pixel(hex_obj.q, hex_obj.r, self.scale_factor)
+            self.bs_positions.append((x + self.center, y + self.center))
+            self.bs_heights.append(self.h_bs)
+            self.bs_ptx.append(self.ptx)
+
+    def _setup_plot_window(self):
         plt.ion()
         self.fig = plt.figure(figsize=(12.5, 10))
         self.ax = self.fig.add_axes([0.05, 0.1, 0.68, 0.82])
@@ -125,13 +162,6 @@ class CellularNetworkReceivedPower:
         self.restart_button = Button(self.restart_ax, 'Restart', color='lightgreen')
         self.toggle_button.on_clicked(self.toggle_animation)
         self.restart_button.on_clicked(self.restart_animation)
-        self.animation_running = True
-
-        # Logging
-        self.logger.setup_log()
-
-        self.setup_plot()
-        self.setup_ues()
 
     @staticmethod
     def _validate_ue_height(ue_height_m: float | None) -> float:
@@ -166,16 +196,8 @@ class CellularNetworkReceivedPower:
                                     linestyle='--', zorder=5))
 
         # BS from hex grid
-        self.bs_positions.clear()
-        self.bs_heights.clear()
-        self.bs_ptx.clear()
         bs_colors = ['red', 'green', 'blue', 'cyan', 'magenta', 'yellow', 'black', 'orange', 'purple', 'brown']
-        for idx, hex_obj in enumerate(self.hexes):
-            x, y = axial_to_pixel(hex_obj.q, hex_obj.r, self.scale_factor)
-            cx, cy = x + self.center, y + self.center
-            self.bs_positions.append((cx, cy))
-            self.bs_heights.append(self.h_bs)
-            self.bs_ptx.append(self.ptx)
+        for idx, (cx, cy) in enumerate(self.bs_positions):
             self.ax.plot(cx, cy, marker='^', color=bs_colors[idx % len(bs_colors)],
                          markersize=5, zorder=6)
             self.ax.text(
@@ -493,14 +515,15 @@ class CellularNetworkReceivedPower:
             self.mobility.step_manhattan_on_grid(ue_idx, d)
 
             x, y = self.ue_positions[ue_idx]
-            self.ue_points[ue_idx].set_data([x], [y])
+            if self.enable_plot:
+                self.ue_points[ue_idx].set_data([x], [y])
 
             bs, serving_rsrp, dist, neighbors = self.radio_model.get_serving_bs(x, y, ue_idx)
 
-            if bs is not None and self.show_link_lines:
+            if self.enable_plot and bs is not None and self.show_link_lines:
                 self.ue_lines[ue_idx].set_data([x, self.bs_positions[bs][0]],
                                                [y, self.bs_positions[bs][1]])
-            else:
+            elif self.enable_plot:
                 self.ue_lines[ue_idx].set_data([], [])
 
             if bs is not None:
@@ -524,11 +547,12 @@ class CellularNetworkReceivedPower:
                 self.ue_handover_count[ue_idx] += 1
             self.previous_serving_bs[ue_idx] = bs
 
-            link_color = self.link_quality_color(serving_rsrp)
-            self.ue_points[ue_idx].set_color(link_color)
-            self.ue_points[ue_idx].set_markeredgecolor('black')
-            self.ue_points[ue_idx].set_markeredgewidth(0.4)
-            self.ue_lines[ue_idx].set_color(link_color)
+            if self.enable_plot:
+                link_color = self.link_quality_color(serving_rsrp)
+                self.ue_points[ue_idx].set_color(link_color)
+                self.ue_points[ue_idx].set_markeredgecolor('black')
+                self.ue_points[ue_idx].set_markeredgewidth(0.4)
+                self.ue_lines[ue_idx].set_color(link_color)
 
             self.logger.log_ue_data(
                 ue_idx, x, y, bs, sinr, handover_flag, neighbors,
@@ -540,7 +564,7 @@ class CellularNetworkReceivedPower:
                 shadow_fading_db=sf_db
             )
 
-            if ue_idx == 0:
+            if self.enable_plot and ue_idx == 0:
                 self.update_selected_ue_info(
                     ue_idx,
                     x,
@@ -555,11 +579,16 @@ class CellularNetworkReceivedPower:
                 )
                 self.update_bs_power_table(ue_idx, bs, serving_rsrp, neighbors)
 
-        self.time_text.set_text(f'Step: {frame}')
-        self.fig.canvas.draw()
-        self.fig.canvas.flush_events()
+        if self.enable_plot:
+            self.time_text.set_text(f'Step: {frame}')
+            self.fig.canvas.draw()
+            self.fig.canvas.flush_events()
 
     def run_animation(self):
+        if not self.enable_plot:
+            self.run_headless(save_csv=True)
+            return
+
         self.animation_running = True
         start_frame = getattr(self, 'current_frame', -1) + 1
         
@@ -578,3 +607,17 @@ class CellularNetworkReceivedPower:
                 self.logger.save_data_to_csv()
             except Exception as e:
                 print('CSV save failed:', e)
+
+    def run_headless(self, save_csv: bool = True):
+        self.animation_running = True
+        start_frame = getattr(self, 'current_frame', -1) + 1
+
+        if start_frame > self.steps:
+            return None
+
+        for frame in range(start_frame, self.steps + 1):
+            self.update(frame)
+
+        if save_csv:
+            return self.logger.save_data_to_csv()
+        return None

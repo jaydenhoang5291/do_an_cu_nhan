@@ -7,6 +7,8 @@ import os
 import pandas as pd
 from datetime import datetime
 
+import config
+
 class SimulationLogger:
     def __init__(self, sim):
         self.sim = sim
@@ -60,7 +62,8 @@ class SimulationLogger:
                 self.sim.data_log[rsrp_key].append(None)
 
     def save_data_to_csv(self):
-        os.makedirs("data", exist_ok=True)
+        output_dir = getattr(config, "SIMULATION_LOG_DIR", "data/simulation_logs")
+        os.makedirs(output_dir, exist_ok=True)
         max_len = max((len(v) for v in self.sim.data_log.values()), default=0)
         for k in self.sim.data_log:
             while len(self.sim.data_log[k]) < max_len:
@@ -73,9 +76,12 @@ class SimulationLogger:
                 df[col] = pd.to_numeric(df[col], errors='coerce').round(2)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        
-        filename = f"{timestamp}_{self.sim.num_ues}_UE_Data.csv"
-        filepath = os.path.join("data", filename)
+        ue_height = float(getattr(self.sim, 'ue_height_m', self.sim.h_ut))
+        height_label = f"h{ue_height:g}m".replace(".", "p")
+
+        filename = f"{timestamp}_{height_label}_{self.sim.num_ues}_UE_Data.csv"
+        filepath = os.path.join(output_dir, filename)
         
         df.to_csv(filepath, index=False, sep=',', decimal='.', encoding='utf-8-sig', float_format='%.2f')
         print(f"Saved single CSV for all {self.sim.num_ues} UEs: {filepath}")
+        return filepath

@@ -6,12 +6,12 @@ import re
 import numpy as np
 import pandas as pd
 
-from .common import PROCESSED_DIR, RAW_DATA_PATH, display_path, ensure_output_dirs, save_json
+from .common import PROCESSED_DIR, RAW_DATA_PATH, SIMULATION_LOGS_DIR, display_path, ensure_output_dirs, save_json
 from .common import PROJECT_ROOT
 
 
 DEFAULT_HISTORY_LEN = 10
-DEFAULT_HORIZON = 10
+DEFAULT_HORIZON = 1
 DEFAULT_TEST_SIZE = 0.2
 LATEST_CSV_SENTINEL = "latest"
 
@@ -20,12 +20,23 @@ TIME_COL_CANDIDATES = ["timestep", "time_step", "step", "time", "frame", "Step"]
 UE_COL_CANDIDATES = ["ue_id", "UE_ID", "ue", "UE"]
 SIM_UE_COL_RE = re.compile(r"^ue\d+_")
 SIM_TARGET_RE = re.compile(r"^ue\d+_sinr$")
-SIM_EXCLUDED_FEATURE_PARTS = (
-    "_los_state",
-    "_sinr_interference",
-    "_sinr_noise",
-    "_sinr_denominator",
-    "_interf_bs",
+SIM_FEATURE_SUFFIXES = (
+    "_x",
+    "_y",
+    "_height",
+    "_direction",
+    "_connected_bs",
+    "_los_probability",
+    "_pathloss",
+    "_shadow_fading",
+    "_rsrp",
+    "_sinr",
+    "_bs1_rsrp",
+    "_bs2_rsrp",
+    "_bs3_rsrp",
+    "_bs4_rsrp",
+    "_bs5_rsrp",
+    "_bs6_rsrp",
 )
 
 
@@ -41,14 +52,17 @@ def _find_first_existing(columns: pd.Index, candidates: list[str]) -> str | None
 
 
 def find_latest_simulator_csv() -> str:
+    candidates = list(SIMULATION_LOGS_DIR.glob("*_UE_Data.csv"))
+    # Backward compatibility for older logs saved directly under data/.
+    candidates.extend((PROJECT_ROOT / "data").glob("*_UE_Data.csv"))
     candidates = sorted(
-        (PROJECT_ROOT / "data").glob("*_UE_Data.csv"),
+        candidates,
         key=lambda path: path.stat().st_mtime,
         reverse=True,
     )
     if not candidates:
         raise FileNotFoundError(
-            "No simulator CSV found in data/*_UE_Data.csv. "
+            "No simulator CSV found in data/simulation_logs/*_UE_Data.csv. "
             f"Pass --csv {display_path(RAW_DATA_PATH)} for the legacy raw-data path, "
             "or run the simulator first."
         )
@@ -67,9 +81,10 @@ def detect_feature_cols(df: pd.DataFrame) -> list[str]:
     for col in df.columns:
         if not SIM_UE_COL_RE.match(col):
             continue
-        if any(part in col for part in SIM_EXCLUDED_FEATURE_PARTS):
+        if not col.endswith(SIM_FEATURE_SUFFIXES):
             continue
-        if pd.api.types.is_numeric_dtype(pd.to_numeric(df[col], errors="coerce")):
+        values = pd.to_numeric(df[col], errors="coerce")
+        if values.notna().any():
             simulator_cols.append(col)
     return sorted(simulator_cols)
 
@@ -91,7 +106,6 @@ def build_sequences(
     ue_col = _find_first_existing(df.columns, UE_COL_CANDIDATES)
     time_col = _find_first_existing(df.columns, TIME_COL_CANDIDATES)
 
-    group_keys = [ue_col] if ue_col is not None else [None]
     X_parts = []
     y_parts = []
 
@@ -151,7 +165,7 @@ def main() -> None:
         "--csv",
         type=str,
         default=LATEST_CSV_SENTINEL,
-        help="Path to simulation CSV log, or 'latest' for newest data/*_UE_Data.csv.",
+        help="Path to simulation CSV log, or 'latest' for newest data/simulation_logs/*_UE_Data.csv.",
     )
     parser.add_argument("--history-len", type=int, default=DEFAULT_HISTORY_LEN)
     parser.add_argument("--horizon", type=int, default=DEFAULT_HORIZON)

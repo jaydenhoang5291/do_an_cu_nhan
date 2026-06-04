@@ -159,6 +159,42 @@ class SimulationBSTests(unittest.TestCase):
         self.assertEqual(sim.steps, config.SIMULATION_STEPS)
         self.assertEqual(sim.time_per_step, config.TIME_PER_STEP_S)
 
+    def test_ue_speed_is_randomized_once_and_then_constant(self):
+        sim = CellularNetworkReceivedPower(
+            num_ues=3,
+            rect_len_m=1000.0,
+            rect_wid_m=1000.0,
+            fast_mode=True,
+            show_link_lines=False,
+            seed=1,
+        )
+
+        initial_speeds = sim.ue_speeds.copy()
+        self.assertTrue(all(config.UE_SPEED_MIN_KMH <= speed <= config.UE_SPEED_MAX_KMH for speed in initial_speeds))
+        self.assertGreater(len(set(initial_speeds)), 1)
+        sim.update(0)
+        sim.update(1)
+        self.assertTrue((sim.ue_speeds == initial_speeds).all())
+        self.assertTrue(all(factor == 1.0 for factor in sim.ue_speed_factor))
+        self.assertEqual(sim.data_log['ue0_speed'][0], initial_speeds[0])
+        self.assertEqual(sim.data_log['ue0_speed'][1], initial_speeds[0])
+
+    def test_headless_simulation_runs_without_plot_artists(self):
+        sim = CellularNetworkReceivedPower(
+            num_ues=1,
+            rect_len_m=1000.0,
+            rect_wid_m=1000.0,
+            fast_mode=True,
+            show_link_lines=False,
+            seed=1,
+            simulation_steps=2,
+            enable_plot=False,
+        )
+
+        self.assertFalse(hasattr(sim, 'fig'))
+        sim.run_headless(save_csv=False)
+        self.assertEqual(sim.data_log['Step'], [0, 1, 2])
+
     def test_ue_height_research_range_is_validated(self):
         sim = CellularNetworkReceivedPower(
             num_ues=1,

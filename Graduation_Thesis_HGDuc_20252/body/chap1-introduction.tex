@@ -1,0 +1,91 @@
+\subsection{Research Context}
+
+Mobility management is an essential function in 5G networks because user equipment (UE) is expected to maintain service continuity while moving through an environment with continuously changing radio conditions. In a mobile scenario, the radio link between a UE and surrounding gNBs is not fixed. As the UE changes its position or height, the distance to each gNB, the line-of-sight (LOS) condition, the path loss, the shadow fading component, and the interference level can all vary over time. These variations directly affect radio measurements such as reference signal received power (RSRP), received signal strength, and signal-to-interference-plus-noise ratio (SINR). Since these measurements are commonly used to evaluate serving-cell quality, they provide an important basis for cell selection, cell reselection, and handover-related decisions.
+
+In dense 5G deployments, this problem becomes more significant because the UE may observe several candidate cells with comparable signal quality. A small change in position may improve the received signal from one gNB while reducing the quality of another. Similarly, a temporary obstruction or a rapid change in interference may cause the best serving-cell candidate to change within a short time interval. If mobility decisions are made too late, the UE may experience degraded signal quality before the handover is completed. If they are made too aggressively, unnecessary handovers may occur, increasing signaling overhead and possibly causing instability. Therefore, studying mobility behavior requires not only observing the final serving cell, but also understanding how the underlying radio measurements evolve before, during, and after a potential handover event.
+
+At the same time, handover is not only a radio-measurement problem. Radio measurements may indicate that a target cell is more suitable, but the actual handover still requires a protocol procedure involving the source gNB, target gNB, UE, and 5G core network (5GC). After the target cell is selected, signaling messages must be exchanged, resources must be prepared, and timers must be monitored until the procedure either completes successfully or fails. The final handover delay can therefore be affected by transport latency, packet loss, jitter, and protocol timer configuration. For this reason, a complete study of mobility should consider both radio-level measurements and protocol-level handover execution. The radio layer explains why a serving-cell change may be needed, while the protocol layer explains how long the handover procedure takes and whether it can complete under the given network conditions.
+
+\subsection{Problem Statement}
+
+Detailed 5G mobility datasets are not always available for controlled research. Real measurement campaigns require suitable radio equipment, repeated field tests, consistent scenarios, and considerable time and effort. In practice, it is difficult to repeat the same UE movement path, the same propagation condition, and the same network configuration many times while changing only one parameter of interest. Environmental factors such as obstacles, traffic load, interference, and user movement may also change between test runs. As a result, real-world measurement data is valuable, but it is not always convenient for isolating the influence of individual radio factors.
+
+Public or archived datasets may also miss intermediate radio parameters, serving-cell decisions, or handover-related labels. Some datasets provide final throughput or connection status, but do not include enough detail about path loss, shadow fading, per-cell RSRP, SINR, or the exact condition that caused a serving-cell change. Other datasets may contain radio measurements but may not include handover indicators or protocol-level information. This makes it difficult to reproduce experiments, compare different scenarios, or analyze how each radio factor affects mobility behavior. A controlled simulation workflow is therefore useful because it allows radio parameters, UE trajectories, and output variables to be defined explicitly and recorded in a structured format.
+
+Handover-delay analysis has a similar limitation. A log that only reports success or failure does not show which signaling phase consumed the most time, which timer expired, or why a procedure failed. For example, two handover attempts may both be marked as successful, but one may complete quickly while the other may only complete after a large delay caused by network latency or retransmission. Conversely, a failed handover attempt may be caused by a timeout, packet loss, late message delivery, or an unsuitable timer configuration. Without timer-level events, these cases cannot be clearly distinguished.
+
+Another important issue is the distinction between radio-level serving-cell changes and protocol-level handover completion. A simulation may indicate that a different gNB becomes the best serving candidate based on RSRP or SINR, but this does not mean that the full handover procedure has already completed. In a real or emulated network procedure, the UE must still pass through the required signaling steps before the handover is finalized. If this distinction is not made, the analysis may incorrectly treat a radio decision as a completed handover. This gap motivates a workflow that can generate structured radio data and analyze handover delay from protocol logs, while keeping the radio-level and protocol-level views separate.
+
+\begin{figure}[H]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+  node distance=1.5cm and 1.1cm,
+  stage/.style={draw, rounded corners=2pt, minimum width=3.2cm, minimum height=0.9cm, align=center, fill=gray!8},
+  data/.style={draw, rounded corners=2pt, minimum width=3.2cm, minimum height=0.9cm, align=center, fill=blue!7},
+  result/.style={draw, rounded corners=2pt, minimum width=3.2cm, minimum height=0.9cm, align=center, fill=green!8},
+  flow/.style={-{Stealth[scale=0.9]}, thick}
+]
+\node[stage] (sim) {5G radio\\simulation};
+\node[data, right=of sim] (csv) {CSV radio\\dataset};
+\node[stage, right=of csv] (emu) {Measurement-driven\\handover emulation};
+\node[result, right=of emu] (analysis) {Delay and timer\\analysis};
+
+\draw[flow] (sim) -- (csv);
+\draw[flow] (csv) -- (emu);
+\draw[flow] (emu) -- (analysis);
+\end{tikzpicture}
+}
+\caption{Overall workflow of radio-data generation and handover-delay analysis}
+\label{fig:introduction-workflow}
+\end{figure}
+
+\subsection{Objectives}
+
+The objective of this thesis is to build and evaluate a reproducible workflow for studying 5G radio measurements and handover delay. The work is designed around two connected parts. The first part focuses on generating radio-measurement data in a controlled simulation environment. The second part focuses on using measurement-driven handover experiments and logs to analyze the delay of the handover procedure. By combining these two parts, the thesis aims to provide a clearer view of how radio conditions motivate mobility decisions and how protocol execution determines the final handover completion behavior.
+
+From a functional perspective, the workflow should be able to simulate UE movement, calculate relevant radio parameters, select or record serving-cell behavior, and export the generated measurements into a structured CSV format. It should also support handover-delay experiments in which timer events and network-condition effects can be inspected. These functional requirements are important because the output of the system must be directly usable for later analysis, instead of only producing visual observations or final summary values.
+
+From a non-functional perspective, the workflow should be reproducible, configurable, and suitable for repeated experiments. Reproducibility is important because the same scenario should be rerun and verified under controlled settings. Configurability is needed because different UE heights, movement paths, radio conditions, and network-delay settings may be examined. The output format should also be clear enough to support post-processing, comparison, and visualization without requiring manual interpretation of unstructured logs.
+
+The specific objectives are:
+
+\begin{itemize}
+    \item generate structured radio-measurement data from a controllable 5G propagation simulation;
+    \item record key mobility and radio parameters, including UE position, serving cell, RSRP, SINR, and handover indicators;
+    \item use measurement-driven handover experiments to observe protocol-level handover behavior;
+    \item analyze how timer behavior and network conditions affect handover completion time, timeout cases, and failure behavior.
+\end{itemize}
+
+\subsection{Scope}
+
+The thesis focuses on simulation-based radio-data generation and log-based handover-delay analysis. The radio-data generation part is limited to the implemented 5G propagation and mobility simulation workflow. It considers the parameters that are available in the simulator, such as UE position, gNB position, propagation-related values, serving-cell information, RSRP, SINR, and handover-related indicators. The purpose of this part is not to reproduce every detail of a commercial 5G network, but to create a controlled and explainable dataset that can be used to inspect mobility behavior under selected scenarios.
+
+The handover-delay analysis part is limited to the implemented measurement-driven handover-emulation workflow and the available experiment logs. The analysis focuses on completion time, timeout behavior, failure cases, and the influence of network conditions such as latency, packet loss, and jitter. It does not attempt to model every internal mechanism of a full 5G core deployment or every vendor-specific handover implementation. Instead, it uses the available timer and event logs to study how protocol-level execution contributes to the observed handover delay.
+
+This thesis does not attempt to perform a full real-world 5G measurement campaign. Such a campaign would require specialized equipment, controlled field conditions, repeated physical measurements, and access to operational network configurations. The thesis also does not aim to design a complete commercial handover optimization algorithm. Although the generated data and delay analysis can support future optimization work, the main focus here is on building the workflow, generating structured data, and analyzing the resulting handover delay characteristics.
+
+\subsection{Main Contributions}
+
+The main contributions of this thesis are:
+
+\begin{itemize}
+    \item a reproducible workflow for generating 5G radio-measurement datasets;
+    \item a structured CSV output format for mobility and handover-related analysis;
+    \item an analysis of handover delay and timer behavior under selected network conditions.
+\end{itemize}
+
+The first contribution is the construction of a reproducible radio-data generation workflow. Instead of relying only on manually collected or incomplete measurement data, the workflow allows selected mobility scenarios to be simulated and recorded in a consistent manner. This makes it possible to inspect how the radio environment changes along a UE trajectory and how those changes are reflected in the generated measurements.
+
+The second contribution is the structured CSV output format. By recording relevant fields such as UE position, serving cell, radio measurements, and handover indicators, the dataset can be used for later processing and comparison. A structured format also reduces ambiguity because each recorded value has a clear role in the analysis pipeline. This is useful for both direct inspection and future extensions, such as visualization, statistical analysis, or machine-learning-based studies.
+
+The third contribution is the analysis of handover delay and timer behavior under selected network conditions. The thesis examines how delay, timeout cases, failure behavior, and recovery margin can be affected by protocol timers and network impairments. This provides a more detailed view of handover performance than a simple success-or-failure summary.
+
+\subsection{Thesis Organization}
+
+The remainder of this thesis is organized as follows:
+
+\noindent\hspace*{1cm}Chapter 2. Theoretical Background\\
+\hspace*{1cm}Chapter 3. System Design\\
+\hspace*{1cm}Chapter 4. Experimental Results\\
+\hspace*{1cm}Chapter 5. Conclusion

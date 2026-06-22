@@ -1,0 +1,242 @@
+% This template is created by SV Bùi Vân Anh, và Thầy Nguyễn Tiến Hòa từ phòng Lab xử lý tín hiệu băng gốc hệ thống 5G. Chúng tôi rất vui nếu được nhắc đến trong lời cảm ơn.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\documentclass{article} % Tạo một bản báo cáo
+\usepackage[utf8]{inputenc}
+\usepackage[T5]{fontenc} % Để sử dụng Tiếng Việt
+\usepackage[fontsize=13pt]{scrextend} % Set fontsize=13pt
+%\usepackage[paperheight=29.7cm,paperwidth=21cm,right=2cm,left=3cm,top=2cm,bottom=2.5cm]{geometry}% Chuẩn A4, căn lề phải, trái, trên, dưới.
+\usepackage[paperheight=29.7cm,paperwidth=21cm,right=2cm,left=3cm,top=2cm,bottom=2.5cm,twoside]{geometry}% Chuẩn A4, căn lề phải, trái, trên, dưới.
+\usepackage{mathptmx} % Time New Roman
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{amsmath}
+\usepackage{longtable}
+\usepackage{geometry}
+\usepackage{array}
+\usepackage{url}
+\usepackage{xcolor}
+\usepackage{graphicx} % Thư viện chèn ảnh
+\usepackage{float} % Set vị trí chèn ảnh
+\usepackage{tikz} % Thư viện tạo khung bìa
+\usepackage{forest}
+\usepackage{enumitem}  % cho phép cấu hình danh sách
+\usepackage[utf8]{inputenc}
+\usepackage{newunicodechar}
+\newunicodechar{≈}{\approx}
+\setlist[itemize]{                 % cấu hình mặc định cho TẤT CẢ itemize
+  leftmargin=2.5em,               % lùi cả bullet + nội dung 2.5 em
+  labelsep=0.6em,                 % khoảng cách giữa bullet và chữ
+  topsep=0.2em,                   % thu hẹp khoảng trắng trước / sau list
+  itemsep=0.2em                   % thu hẹp khoảng trắng giữa các item
+}
+\setlist[enumerate]{leftmargin=2.5em,labelsep=0.6em,topsep=0.2em,itemsep=0.2em}
+\forestset{
+  default preamble={
+    font=\ttfamily\small,
+    grow'=0,
+    child anchor=west,
+    parent anchor=east,
+    edge={-},
+    l sep=1cm,
+    s sep=2mm
+  }
+}
+\tikzset{
+    box/.style={draw, rounded corners=2pt,
+               minimum width=28mm, minimum height=10mm,
+               align=center, inner sep=2pt},
+  innerbox/.style={draw, rounded corners=2pt, fill=gray!12,
+                   minimum width=25mm, minimum height=8mm,
+                   align=center, inner sep=2pt},
+  arrow/.style={-{Stealth[scale=0.9]}, thick}
+}
+\lstdefinelanguage{bash}{
+  keywords={make, all},
+  keywordstyle=\color{blue}\bfseries,
+  sensitive=true,
+  morecomment=[l]{\#},
+  commentstyle=\color{gray}\ttfamily,
+  morestring=[b]",
+}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  language=bash,
+  frame=single,
+  backgroundcolor=\color{gray!10},
+  captionpos=b
+}
+\usetikzlibrary{
+  positioning, shapes.geometric, shapes.multipart,
+  fit, arrows.meta, backgrounds, matrix
+}
+\usetikzlibrary{calc} % Thư viện tikz
+\usepackage{indentfirst} % Thư viện thụt đầu dòng
+\usepackage{booktabs} % To thicken table lines
+\renewcommand{\baselinestretch}{1.2} % Giãn dòng 1.2
+\setlength{\parskip}{6pt} % Spacing after
+\setlength{\parindent}{1cm} % Set khoảng cách thụt đầu dòng mỗi đoạn
+\usepackage{titlesec} % Thư viện để set up các kiểu chữ
+\setcounter{secnumdepth}{4} % 4 Heading
+\titlespacing*{\section}{0pt}{0pt}{30pt} % Heading 1
+\titleformat*{\section}{\fontsize{16pt}{0pt}\selectfont \bfseries \centering}
+
+\titlespacing*{\subsection}{0pt}{10pt}{0pt} % Heading 2
+\titleformat*{\subsection}{\fontsize{14pt}{0pt}\selectfont \bfseries}
+
+\titlespacing*{\subsubsection}{0pt}{10pt}{0pt} % Heading 3
+\titleformat*{\subsubsection}{\fontsize{13pt}{0pt}\selectfont \bfseries \itshape}
+
+\titlespacing*{\paragraph}{0pt}{10pt}{0pt} % Heading 4
+\titleformat*{\paragraph}{\fontsize{13pt}{0pt}\selectfont \itshape}
+
+\renewcommand{\figurename}{\fontsize{12pt}{0pt}\selectfont \bfseries Figure}
+\renewcommand{\thefigure}{\thesection.\arabic{figure}}
+\usepackage[font=bf]{caption}
+\captionsetup[figure]{labelsep=space}
+
+\renewcommand{\tablename}{\fontsize{12pt}{0pt}\selectfont \bfseries Table}
+\renewcommand{\thetable}{\thesection.\arabic{table}}
+\captionsetup[table]{labelsep=space}
+
+\usepackage{tabularx}
+\newcolumntype{s}{>{\hsize=.3\hsize}X}
+\newcolumntype{y}{>{\hsize=.4\hsize}X}
+\newcolumntype{d}{>{\hsize=.1\hsize}X}
+\newcolumntype{a}{>{\hsize=1.1\hsize}X}
+\newcolumntype{g}{>{\hsize=5\hsize}X}
+\renewcommand{\tabularxcolumn}[1]{>{\small}m{#1}}
+
+\renewcommand{\theequation}{\thesection.\arabic{equation}} % Thay đổi đánh số phương trình mặc định
+\newtheorem{theorem}{Định lý}[section]
+\newtheorem{defn}[theorem]{Định nghĩa}
+\newtheorem{corollary}[theorem]{Hệ quả}
+\newtheorem{lemma}[theorem]{Bổ đề}
+
+\usepackage{lipsum} % Thư viện tạo chữ linh tinh.
+\renewcommand{\contentsname}{TABLE OF CONTENTS}
+\renewcommand{\listfigurename}{LIST OF FIGURES}
+\renewcommand{\listtablename}{LIST OF TABLES}
+\renewcommand{\lstlistlistingname}{LIST OF LISTINGS}
+\renewcommand{\refname}{REFERENCES}
+
+\usepackage[unicode]{hyperref}
+\renewcommand{\theHfigure}{\thesection.\arabic{figure}}
+\renewcommand{\theHtable}{\thesection.\arabic{table}}
+\renewcommand{\theHequation}{\thesection.\arabic{equation}}
+\usepackage{colortbl}
+\definecolor{LightCyan}{rgb}{0.88,1,1}
+\usepackage{forloop}
+\newcounter{loopcntr}
+\newcommand{\rpt}[2][1]{\forloop{loopcntr}{0}{\value{loopcntr}<#1}{#2}}
+
+\begin{document}
+\hypersetup{pageanchor=false}
+
+\input{Bia} % Bìa đồ án.
+
+\input{DanhGia} % Đánh giá quyển đồ án tốt nghiệp cho giảng viên hướng dẫn và cán bộ phản biện.
+
+\input{LoiNoiDau} % Lời nói đầu.
+
+\input{LoiCamDoan} % Lời cam đoan.
+
+ % Tạo mục lục tự động
+\addtocontents{toc}{\protect\thispagestyle{empty}}
+\tableofcontents 
+\thispagestyle{empty}
+\cleardoublepage
+
+\cleardoublepage
+\pagenumbering{roman}
+\hypersetup{pageanchor=true}
+\input{Abbreviations} % Danh mục ký hiệu và chữ viết tắt
+
+%Tạo danh mục hình vẽ.
+{\let\oldnumberline\numberline
+\renewcommand{\numberline}{Figure~\oldnumberline}
+\listoffigures} 
+\phantomsection\addcontentsline{toc}{section}{\protect\numberline{} LIST OF FIGURES}
+\newpage
+
+%Tạo danh mục bảng biểu.
+{\let\oldnumberline\numberline
+\renewcommand{\numberline}{Table~\oldnumberline}
+\listoftables}
+\phantomsection\addcontentsline{toc}{section}{\protect\numberline{} LIST OF TABLES}
+\newpage
+
+%Tạo danh mục List code.
+{\let\oldnumberline\numberline
+\renewcommand{\numberline}{Table~\oldnumberline}
+\lstlistoflistings}
+\phantomsection\addcontentsline{toc}{section}{\protect\numberline{} LIST OF LISTINGS}
+\newpage
+
+\input{Abstract} % Tóm tắt đồ án 
+
+\pagenumbering{arabic} % Đánh số thứ tự 1,2,3...
+\section*{CHAPTER 1. INTRODUCTION}
+\addcontentsline{toc}{section}{\protect\numberline{}CHAPTER 1. INTRODUCTION}
+\setcounter{section}{1}
+\setcounter{subsection}{0}
+\setcounter{figure}{0}
+\setcounter{table}{0}
+\input{body/chap1-introduction}
+\pagebreak 
+ 
+\section*{CHAPTER 2. THEORETICAL BACKGROUND}
+\addcontentsline{toc}{section}{\protect\numberline{}CHAPTER 2. THEORETICAL BACKGROUND}
+\setcounter{section}{2}
+\setcounter{subsection}{0}
+\setcounter{figure}{0}
+\setcounter{table}{0}
+\input{body/chap2-theoretical_background}
+\pagebreak
+
+\section*{CHAPTER 3. SYSTEM DESIGN}
+\addcontentsline{toc}{section}{\protect\numberline{}CHAPTER 3. SYSTEM DESIGN}
+\setcounter{section}{3}
+\setcounter{subsection}{0}
+\setcounter{figure}{0}
+\setcounter{table}{0}
+\input{body/chap3-system_design}
+\pagebreak 
+
+\section*{CHAPTER 4. EXPERIMENTAL RESULTS}
+\addcontentsline{toc}{section}{\protect\numberline{}CHAPTER 4. EXPERIMENTAL RESULTS}
+\setcounter{section}{4}
+\setcounter{subsection}{0}
+\setcounter{figure}{0}
+\setcounter{table}{0}
+\input{body/chap4-experimental_results}
+\pagebreak 
+
+\section*{CHAPTER 5. CONCLUSION}
+\addcontentsline{toc}{section}{\protect\numberline{}CHAPTER 5. CONCLUSION}
+\setcounter{section}{5}
+\setcounter{subsection}{0}
+\setcounter{figure}{0}
+\setcounter{table}{0}
+\input{body/chap5-conclusion}
+\pagebreak 
+
+\input{body/appendices}
+
+\phantomsection
+\addcontentsline{toc}{section}{\protect\numberline{}REFERENCES}
+\nocite{*}
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+
+
+
+
+
+
+
+
+
+\end{document}

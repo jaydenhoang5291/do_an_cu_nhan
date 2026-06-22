@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Local runtime/cache output
+.env
+.env.*
+*.log
+logs/
+data/.matplotlib/
+
+# Go/build output
+bin/
+dist/
+build/
+coverage.out
+
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
+Graduation_Thesis_HGDuc_20252/build/
+
+# Project-generated experiment outputs
+Code_HO/logs/
+Code_HO/venv/
+Code_HO/timer-events-*.csv
+Code_HO/timer_anomalies*.csv
+Code_HO/timer_summary*.csv
+Code_HO/handover-trial-summary-*.csv
+Code_HO/ho-time-log.csv
+
+# Editor/OS noise
+.DS_Store
+Thumbs.db
+.idea/

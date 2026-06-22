@@ -1,0 +1,18 @@
+# latexmk configuration
+# Build with pdfLaTeX and place all output (including the final PDF) under
+# ./build to keep the source tree clean.
+
+$pdf_mode   = 1;          # generate PDF using pdflatex
+$bibtex_use = 2;          # run the bibliography tool as needed, clean .bbl on -C
+$out_dir    = 'build';
+$aux_dir    = 'build';
+
+# The thesis loads biblatex with `backend=bibtex` (see main.tex), so let latexmk
+# auto-detect and invoke bibtex; do NOT force biber here.
+
+# Non-interactive (Docker) builds: keep going past the first error and emit
+# file:line:error messages for editor integration.
+set_tex_cmds('-interaction=nonstopmode -synctex=1 -file-line-error %O %S');
+
+# Extra files for `latexmk -C` (clean) to remove.
+$clean_ext = 'bbl run.xml synctex.gz glo gls glg acn acr alg ist';

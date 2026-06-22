@@ -1,0 +1,196 @@
+\subsection{System Architecture}
+
+The platform has two independently executable subsystems:
+
+\begin{equation}
+\text{Radio scenario}\rightarrow\text{measurement CSV}\rightarrow
+\text{StormSim handover}\rightarrow\text{timer and delay results}.
+\end{equation}
+
+The first subsystem is the Python radio simulator. It generates mobility and radio measurements, including UE position, serving-cell selection, neighbor-cell RSRP, path loss, shadow fading, received power, and SINR. This subsystem is responsible for the radio-level view of the problem: it explains when the radio condition suggests that another gNB should become the serving cell.
+
+The second subsystem is the protocol-level handover test environment. It uses a free5GC-based 5G Core and a Go-based UE--gNB emulator named StormSim in the implementation. free5GC provides the core-network side of the experiment, including AMF connectivity for NGAP/N2 signaling and user-plane support through GTP-U/N3 \cite{free5gc_project}. StormSim emulates the UE and gNB behavior required by the selected handover scenarios. It connects to the 5G Core, creates UE/gNB contexts, triggers Xn or N2 handover procedures, applies configurable transport impairment such as latency, packet loss, and jitter, and records trial-summary and timer-event logs.
+
+The Python simulator and StormSim therefore have different responsibilities. The Python simulator does not execute the full handover signaling procedure, while StormSim does not replace the radio-propagation simulator. Instead, StormSim is used to study protocol-level execution after a target-cell transition is selected or replayed. Their current CSV schemas are not identical: the first exports \texttt{ue0\_connected\_bs}, while measurement mode expects \texttt{connected\_gnb} and \texttt{gnbX\_rsrp}.
+
+\textbf{TODO: cần xác nhận từ người dùng.} Confirm the official schema-conversion step and input CSV.
+
+\subsection{Radio Simulation Design}
+
+\subsubsection{Network and Mobility}
+
+The user-defined rectangular region is centered in a 10 km canvas. Ground gNBs are placed on an axial hexagonal grid with geometric radius 500 m and adjacent-site spacing approximately 866 m. Each UE begins at a random road intersection, selects a valid cardinal direction, and receives a uniformly sampled speed of 20--60 km/h. Movement per step is \(d=v\Delta t\), with \(\Delta t=1\) s. After three direction changes, the UE stops for nine steps and accelerates over two steps.
+
+A useful part of the simulator is that the number of gNBs is not fixed manually. Instead, it is scaled from the rectangular simulation area entered by the user. The implementation follows the axial-coordinate representation for hexagonal grids, where each hexagon is stored as \((q,r)\) and the third cube coordinate is recovered as
+
+\begin{equation}
+    s=-q-r.
+\end{equation}
+
+This keeps the cube-coordinate constraint \(q+r+s=0\) while storing only two coordinates, which is a standard practical approach for hexagonal-grid algorithms \cite{redblob_hexagons}. The simulator uses the flat-top axial-to-pixel conversion
+
+\begin{align}
+    x &= R\left(\frac{3}{2}q\right),\\
+    y &= R\left(\sqrt{3}r+\frac{\sqrt{3}}{2}q\right),
+\end{align}
+
+where \(R=500\) m is the geometric hexagon radius. These coordinates are then shifted by the canvas center so that the generated grid is centered on the simulation map. With this flat-top layout, neighboring gNB centers are spaced by approximately \(\sqrt{3}R\), which gives about 866 m for \(R=500\) m.
+
+To adapt the topology to an arbitrary user-defined rectangle, the algorithm first estimates the axial coordinate ranges needed to cover the requested width and height:
+
+\begin{align}
+    q &\in \left[
+    \mathrm{int}\left(-\frac{W}{1.5R}\right)-1,\,
+    \mathrm{int}\left(\frac{W}{1.5R}\right)+1
+    \right],\\
+    r &\in \left[
+    \mathrm{int}\left(-\frac{H}{\sqrt{3}R}\right)-1,\,
+    \mathrm{int}\left(\frac{H}{\sqrt{3}R}\right)+1
+    \right],
+\end{align}
+
+where \(W\) and \(H\) are the user-entered simulation width and height, and \(\mathrm{int}(\cdot)\) denotes the integer conversion used in the implementation. The additional margin of one axial step avoids missing edge cells after the skewed axial grid is converted into Cartesian coordinates. The simulator then enumerates all \((q,r)\) pairs in these ranges, computes \(s=-q-r\), converts the hex center to pixel coordinates, and keeps only the centers that fall inside the simulation rectangle expanded by a boundary buffer:
+
+\begin{equation}
+    b=\frac{\sqrt{3}}{2}R.
+\end{equation}
+
+Thus a candidate gNB is retained when
+
+\begin{equation}
+    x_{\min}-b \le x \le x_{\max}+b,
+    \qquad
+    y_{\min}-b \le y \le y_{\max}+b.
+\end{equation}
+
+This design makes the gNB count a consequence of the requested study area instead of a hard-coded parameter. A larger rectangle automatically produces more hexagonal sites, while a smaller rectangle keeps only the sites needed near that region. The buffer also ensures that UEs near the simulation boundary still observe nearby external cells, reducing artificial edge effects in RSRP, SINR, and serving-cell selection.
+
+\subsubsection{Radio Parameters}
+
+\begin{table}[H]
+\centering
+\caption[Principal radio parameters]{Principal radio parameters \cite{3gpp_38901,3gpp_36777,3gpp_36104,3gpp_36101}}
+\begin{tabular}{lll}
+\toprule
+Parameter & Value & Use\\
+\midrule
+Carrier frequency & 2 GHz & Path loss\\
+gNB power & 46 dBm & Link budget\\
+Bandwidth / noise figure & 10 MHz / 9 dB & Noise\\
+gNB / ground-UE height & 25 / 1.5 m & 3D distance\\
+Aerial height range & 1.5--300 m & UMa-AV\\
+Handover margin & 3 dB & Cell change\\
+Simulation steps & 0--300 & 301 output rows\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The table combines standardized propagation assumptions with implementation-level simulation settings from \texttt{config.py}. In particular, the RSRP approximation below uses \(50\) LTE resource blocks for a 10 MHz carrier and \(12\) subcarriers per resource block; it is not an exact physical-layer CRS, SS-RSRP, or CSI-RSRP realization.
+
+\subsubsection{Propagation-Model Calculation Flow}
+
+The propagation model is executed for each UE--gNB candidate link at every simulation step. Its role is to transform the geometry and UE height into the radio fields that are later used for serving-cell selection, SINR calculation, and dataset generation.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.9cm and 0.55cm, font=\small]
+    \node[box, text width=2.45cm] (geom) {UE/gNB\\position and height};
+    \node[box, text width=2.45cm, right=of geom] (dist) {2D/3D distance\\height regime};
+    \node[box, text width=2.45cm, right=of dist] (los) {LOS probability\\cached LOS/NLOS};
+    \node[box, text width=2.45cm, below=of los] (pl) {UMa/UMa-AV\\path loss};
+    \node[box, text width=2.45cm, left=of pl] (sf) {Shadow fading\\cache/update};
+    \node[box, text width=2.45cm, left=of sf] (meas) {Received power,\\RSRP and SINR};
+    \node[box, text width=2.45cm, below=of sf] (out) {Serving cell\\and CSV fields};
+
+    \draw[arrow] (geom) -- (dist);
+    \draw[arrow] (dist) -- (los);
+    \draw[arrow] (los) -- (pl);
+    \draw[arrow] (pl) -- (sf);
+    \draw[arrow] (sf) -- (meas);
+    \draw[arrow] (meas) |- (out);
+\end{tikzpicture}
+\caption{Propagation-model calculation flow implemented in the radio simulator}
+\label{fig:propagation-calculation-flow}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{Implementation mapping of the propagation-model calculations}
+\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.8cm}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}p{4.0cm}}
+\toprule
+Stage & Operation in the simulator & Output used later\\
+\midrule
+Geometry & Use UE/gNB positions and heights to compute 2D/3D distances and choose the ground or aerial propagation branch. & Link distance and height regime\\
+LOS state & Evaluate the LOS probability, then sample or reuse the cached Bernoulli LOS/NLOS state for each UE--gNB link. & \texttt{los\_probability}, \texttt{los\_state}\\
+Path loss & Apply the UMa or UMa-AV formula according to distance, height, carrier frequency, and LOS/NLOS state. & \texttt{pathloss}\\
+Shadow fading & Draw clipped Gaussian shadow fading, keep it in the link cache, and refresh it after 25 m of accumulated UE movement. & \texttt{shadow\_fading}\\
+RSRP and SINR & Apply the link budget, map total received power to RSRP, add first-tier interference and thermal noise, and compute SINR. & \texttt{rsrp}, \texttt{sinr}, neighbor RSRP fields\\
+\bottomrule
+\end{tabularx}
+\label{tab:propagation-implementation-mapping}
+\end{table}
+
+This flow is applied to the serving link, candidate serving cells, and first-tier interfering cells. The shadow-fading value is stored in the same per-link cache as the LOS/NLOS state and is resampled after 25 m of accumulated UE motion, as described in Chapter 2. Received power and RSRP are
+
+\begin{align}
+P_{\mathrm{rx}} &= P_{\mathrm{tx}}+G_{\mathrm{tx}}+G_{\mathrm{rx}}-PL-SF,\\
+\mathrm{RSRP} &= P_{\mathrm{rx}}-10\log_{10}(50\times12).
+\end{align}
+
+SINR includes thermal noise and interference from six first-tier gNBs.
+
+\subsubsection{Handover Decision and Output}
+
+The strongest cell is selected initially. Candidate \(c\) replaces serving cell \(s\) only when
+
+\begin{equation}
+\mathrm{RSRP}_{c}>\mathrm{RSRP}_{s}+3~\mathrm{dB}.
+\end{equation}
+
+There is no time-to-trigger or SINR threshold. The CSV records position, height, direction, LOS, path loss, shadow fading, RSRP, received power, SINR, speed, serving BS, handover flag, and six neighbor measurements.
+
+\subsection{StormSim Handover Evaluation}
+
+StormSim communicates with the free5GC AMF through SCTP/NGAP on N2 and supports GTP-U on N3. Loss is temporarily disabled while the UE registers and establishes a PDU session, then restored for the handover experiment.
+
+Measurement mode reads \texttt{Step}, \texttt{connected\_gnb}, \texttt{gnbX\_rsrp}, and optional \texttt{Type}. A normal trigger occurs when \texttt{connected\_gnb} changes. The handover monitor follows
+
+\begin{equation}
+\mathrm{NULL}\rightarrow\mathrm{PREPARE}\rightarrow\mathrm{EXECUTE}
+\rightarrow\mathrm{COMPLETE}\rightarrow\{\mathrm{SUCCESS},\mathrm{FAIL}\}.
+\end{equation}
+
+YAML parameters independently configure packet loss, one-way latency, and jitter for radio and Xn paths.
+
+\begin{table}[H]
+\centering
+\caption{Implemented handover timers}
+\begin{tabular}{lrlr}
+\toprule
+Timer & Value & Timer & Value\\
+\midrule
+TXnRELOCprep & 3 s & TXnRELOCoverall & 6 s\\
+TNGRELOCprep & 5 s & TNGRELOCoverall & 10 s\\
+T304 & 1000 ms & T310 & 1 s\\
+T311 & 3 s & T301 & 2 s\\
+T312 & 500 ms & T430 & 30 s\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The test plan states T304 = 100 ms, but executable source defines 1000 ms.
+
+\textbf{TODO: cần xác nhận từ người dùng.} Confirm the official T304 value.
+
+In addition, the current Xn trigger explicitly assigns the new virtual radio connection a downlink execution delay equal to T304 plus 500 ms. This setting is intended to exercise T304 failure behavior. It does not match archived successful timer records that stop T304 after only tens of milliseconds.
+
+\textbf{TODO: cần xác nhận từ người dùng.} Identify the exact source revision and command used for each official archived result.
+
+\subsection{Evaluation Metrics}
+
+The authoritative trial output records source, target, handover type, result, failure reason, and total procedure time. The metrics are success rate, failure rate, and successful-trial mean, median, and 95th-percentile delay. The log column named \texttt{pdr} currently stores \texttt{PacketLoss}; it is interpreted as loss probability in this report.
+
+\subsection{Chapter Conclusion}
+
+The design separates instantaneous radio cell selection from protocol-level execution delay, while exposing the current schema and timer-consistency issues that constrain the experiments.

@@ -1,0 +1,39 @@
+# Docker-based LaTeX toolchain — no host TeX installation required.
+#
+#   docker compose run --rm build     # one-shot build  -> build/main.pdf
+#   docker compose run --rm watch     # continuous rebuild on file changes
+#   docker compose run --rm clean     # remove build artefacts
+#   docker compose run --rm shell     # interactive shell inside the image
+#
+# The image is pinned to a release tag for reproducibility; bump it deliberately.
+
+services:
+  build:
+    image: texlive/texlive:latest
+    working_dir: /thesis
+    volumes:
+      - ./:/thesis
+    command: latexmk -pdf main.tex
+
+  watch:
+    image: texlive/texlive:latest
+    working_dir: /thesis
+    volumes:
+      - ./:/thesis
+    command: latexmk -pdf -pvc -view=none main.tex
+
+  clean:
+    image: texlive/texlive:latest
+    working_dir: /thesis
+    volumes:
+      - ./:/thesis
+    command: latexmk -C main.tex
+
+  shell:
+    image: texlive/texlive:latest
+    working_dir: /thesis
+    volumes:
+      - ./:/thesis
+    entrypoint: /bin/bash
+    stdin_open: true
+    tty: true

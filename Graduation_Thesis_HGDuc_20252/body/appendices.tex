@@ -1,0 +1,186 @@
+\section*{APPENDIX A. IMPLEMENTATION AND DATA REFERENCE}
+\addcontentsline{toc}{section}{\protect\numberline{}APPENDIX A. IMPLEMENTATION AND DATA REFERENCE}
+\setcounter{section}{6}
+\setcounter{subsection}{0}
+\setcounter{figure}{0}
+\setcounter{table}{0}
+
+\subsection{Radio Simulator Module Mapping}
+
+\begin{longtable}{p{3.2cm}p{10.7cm}}
+\toprule
+Module & Research responsibility\\
+\midrule
+\endfirsthead
+\toprule
+Module & Research responsibility\\
+\midrule
+\endhead
+\texttt{main.py} & Reads scenario inputs and starts the interactive simulation.\\
+\texttt{config.py} & Defines radio, mobility, timing, and output constants.\\
+\texttt{hexagons.py} & Generates axial hexagonal gNB locations.\\
+\texttt{mobility.py} & Implements roads, intersections, turns, boundaries, and stop-and-go motion.\\
+\texttt{radio\_models.py} & Implements LOS probability, UMa/UMa-AV path loss, fading, RSRP, interference, SINR, and association.\\
+\texttt{simulation.py} & Owns simulation state, executes each time step, updates visualization, and coordinates logging.\\
+\texttt{logger.py} & Builds the per-step dataset and writes the combined CSV.\\
+\texttt{ue.py} & Validates and stores aerial-UE metadata.\\
+\texttt{utils.py} & Reads numeric input and applies defaults.\\
+\bottomrule
+\end{longtable}
+
+\subsection{Protocol Test Environment}
+
+\begin{longtable}{p{3.2cm}p{10.7cm}}
+\toprule
+Component & Research responsibility\\
+\midrule
+\endfirsthead
+\toprule
+Component & Research responsibility\\
+\midrule
+\endhead
+\texttt{free5GC} & Provides the 5G Core functions used by the protocol-level experiment, especially AMF-side NGAP/N2 connectivity and user-plane support through GTP-U/N3.\\
+\texttt{StormSim} & Emulates UE and gNB behavior for selected handover scenarios, connects to the 5G Core, injects configurable loss, delay, and jitter, and exports trial-summary and timer-event logs.\\
+\texttt{Python radio simulator} & Generates radio-level mobility and measurement traces used to inspect RSRP, SINR, serving-cell changes, and neighbor-cell behavior.\\
+\bottomrule
+\end{longtable}
+
+\subsection{StormSim Module Mapping}
+
+\begin{longtable}{p{4.2cm}p{9.7cm}}
+\toprule
+Package & Research responsibility\\
+\midrule
+\endfirsthead
+\toprule
+Package & Research responsibility\\
+\midrule
+\endhead
+\texttt{cmd/emulator} & Selects normal, replay, CSV, measurement, failure, and CHO modes.\\
+\texttt{pkg/config} & Loads YAML and CSV input schemas.\\
+\texttt{pkg/model} & Defines shared UE, gNB, session, event, RRC, and CHO data.\\
+\texttt{internal/common/fsm} & Executes asynchronous state machines.\\
+\texttt{internal/common/logger} & Records protocol, timer, delay, and CSV/NDJSON outputs.\\
+\texttt{internal/transport/rlink} & Emulates UE--gNB channels with directional loss, delay, jitter, and counters.\\
+\texttt{internal/transport/sctpngap} & Provides SCTP/NGAP transport to the AMF.\\
+\texttt{internal/core/uecontext} & Implements UE 5GMM/5GSM, NAS security, sessions, handover execution, recovery timers, and CHO evaluation.\\
+\texttt{internal/core/gnbcontext} & Implements gNB context, NGAP handling, Xn/N2 handover, path switch, and CHO preparation.\\
+\texttt{internal/core/monitor} & Tracks handover phases, results, groups, NTN visibility metadata, and OAM responses.\\
+\texttt{internal/scenarios} & Creates UE/gNB experiments and exports trial/timer results.\\
+\texttt{monitoring} & Provides OAM, resource, PCAP, and GTP-U support.\\
+\bottomrule
+\end{longtable}
+
+\subsection{Python Radio CSV Dictionary}
+
+For UE index \(i\), the logger creates the following fields.
+
+\begin{longtable}{p{4.6cm}p{9.3cm}}
+\toprule
+Column pattern & Meaning\\
+\midrule
+\endfirsthead
+\toprule
+Column pattern & Meaning\\
+\midrule
+\endhead
+\texttt{Step} & Discrete simulation frame.\\
+\texttt{ue\(i\)\_x}, \texttt{ue\(i\)\_y} & UE Cartesian position in metres.\\
+\texttt{ue\(i\)\_height} & UE height above ground in metres.\\
+\texttt{ue\(i\)\_direction} & 0: east, 1: north, 2: west, 3: south.\\
+\texttt{ue\(i\)\_connected\_bs} & Serving gNB array index.\\
+\texttt{ue\(i\)\_los\_probability} & Calculated LOS probability for the serving link.\\
+\texttt{ue\(i\)\_los\_state} & Cached sampled state: LOS or NLOS.\\
+\texttt{ue\(i\)\_pathloss} & Path loss before shadow fading, in dB.\\
+\texttt{ue\(i\)\_shadow\_fading} & Additional shadow-fading loss, in dB.\\
+\texttt{ue\(i\)\_rsrp} & Serving-cell RSRP approximation, in dBm.\\
+\texttt{ue\(i\)\_prx} & Total serving received power, in dBm.\\
+\texttt{ue\(i\)\_sinr} & Serving-link SINR, in dB.\\
+\texttt{ue\(i\)\_speed} & Effective speed after pause/ramp factor, in km/h.\\
+\texttt{ue\(i\)\_handover} & One if the serving index differs from the previous step.\\
+\texttt{ue\(i\)\_bs\(n\)\_idx} & Index of ranked non-serving neighbor \(n\), \(1\leq n\leq6\).\\
+\texttt{ue\(i\)\_bs\(n\)\_rsrp} & RSRP of that neighbor, in dBm.\\
+\bottomrule
+\end{longtable}
+
+\subsection{StormSim Measurement Input Dictionary}
+
+\begin{longtable}{p{4.3cm}p{9.6cm}}
+\toprule
+Column & Meaning\\
+\midrule
+\endfirsthead
+\toprule
+Column & Meaning\\
+\midrule
+\endhead
+\texttt{Step} or \texttt{Bước} & Input sequence index.\\
+\texttt{connected\_gnb} & Serving gNB identifier for the current row. A change creates a normal handover trigger.\\
+\texttt{gnbX\_rsrp} & RSRP associated with gNB key \texttt{gnbX}; used by CHO or retained as measurement context.\\
+\texttt{Type} & Handover type string; defaults to Xn when absent or empty.\\
+\bottomrule
+\end{longtable}
+
+\subsection{Timer Event Output Dictionary}
+
+\begin{longtable}{p{4.1cm}p{9.8cm}}
+\toprule
+Field & Meaning\\
+\midrule
+\endfirsthead
+\toprule
+Field & Meaning\\
+\midrule
+\endhead
+\texttt{ts}, \texttt{start\_ts}, \texttt{stop\_ts} & Event and lifecycle timestamps.\\
+\texttt{trial\_id} & Measurement-row/trial identifier.\\
+\texttt{pdr} & Currently stores configured packet-loss probability despite its name.\\
+\texttt{delay\_ms} & Configured delay copied into telemetry.\\
+\texttt{ho\_type} & Xn or N2/NG label.\\
+\texttt{timer\_name} & Timer whose lifecycle generated the event.\\
+\texttt{event} & Start, stop, timeout, cancel, restart, zombie, or transport-failure marker.\\
+\texttt{elapsed\_ms} & Duration measured by the timer engine.\\
+\texttt{result}, \texttt{stop\_reason} & Interpreted terminal status.\\
+\texttt{source\_gnb}, \texttt{target\_gnb} & Handover endpoints associated with the timer.\\
+\texttt{rsrp\_at\_trigger} & Defined telemetry field; not populated in the selected logs.\\
+\texttt{rlf\_detected}, beam/RLF/N2 fields & Defined for planned scenarios; zero or empty does not prove a measured zero.\\
+\bottomrule
+\end{longtable}
+
+\subsection{Trial Summary Output Dictionary}
+
+\begin{longtable}{p{4.1cm}p{9.8cm}}
+\toprule
+Field & Meaning\\
+\midrule
+\endfirsthead
+\toprule
+Field & Meaning\\
+\midrule
+\endhead
+\texttt{trial\_id} & Handover attempt identifier.\\
+\texttt{overall\_result} & \texttt{success} or \texttt{fail}.\\
+\texttt{fail\_reason} & Scenario-level failure reason.\\
+\texttt{total\_ho\_ms} & Time from monitor procedure start to observed completion/failure.\\
+\texttt{source\_gnb}, \texttt{target\_gnb} & Source and requested target identifiers.\\
+\texttt{pdr}, \texttt{delay\_ms}, \texttt{ho\_type} & Copied experiment-condition labels.\\
+\texttt{rlf\_offset\_ms}, \texttt{rsrp\_during\_ho}, \texttt{reestab\_target\_gnb} & Planned RLF-scenario fields, generally unpopulated in the selected runs.\\
+\bottomrule
+\end{longtable}
+
+\subsection{Reproducibility Checklist}
+
+An official experiment package should retain:
+
+\begin{enumerate}
+    \item an immutable source revision;
+    \item the exact command line and YAML configuration;
+    \item the input measurement CSV and its schema version;
+    \item all random seeds;
+    \item timer values, especially T304;
+    \item raw timer events and trial summaries;
+    \item expected trial count and a timer-lifecycle completeness report;
+    \item an explicit statement that \texttt{pdr} means loss probability or a corrected field name.
+\end{enumerate}
+
+\clearpage

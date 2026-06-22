@@ -1,0 +1,19 @@
+\subsection{Summary and Contributions}
+
+This thesis combines a Python radio simulator with a free5GC-based protocol test environment and a Go UE--gNB emulator named StormSim. The Python simulator generates mobility, UMa/UMa-AV propagation, RSRP, SINR, serving-cell, neighbor, and handover traces. StormSim connects to the 5G Core, replays cell transitions, executes Xn/N2 handover, injects impairment, and records timer and delay behavior. The main methodological contribution is the explicit separation of radio target selection from protocol completion.
+
+\subsection{Verified Findings}
+
+In selected Xn runs at a logged delay of 20 ms, 210/210 attempts succeeded at loss probability 0.10 and 171/195 at 0.50. The 24 failures correspond to Xn preparation transport failures/timeouts. Successful attempts were observed near 200.6 ms, partly due to 200 ms polling.
+
+\subsection{Limitations}
+
+The CSV schemas are not yet unified. Python runs lack a default seed, LOS state is cached per link, RSRP is a system-level approximation, and the decision has no time-to-trigger. StormSim logs loss under the name PDR, T304 differs between plan and code, and timer lifecycle coverage is incomplete. The current Xn failure-delay setting also differs from the behavior visible in archived successful logs, so their exact source revision must be identified. CHO NTN position/coverage conditions remain placeholders, and the full NTN experiment matrix is not yet evidenced by the repository.
+
+\subsection{Future Work}
+
+Future work should unify the CSV schema, create fixed-seed radio datasets, confirm T304, correct PDR/loss naming, guarantee one complete timer lifecycle per trial, reduce polling quantization, and execute the planned loss--delay, T304 breakpoint, Xn/N2, RLF, and beam-failure experiments.
+
+\subsection{Final Conclusion}
+
+The project is a usable foundation for studying how radio measurements lead to cell changes and how signaling impairment affects handover execution. Current evidence supports conclusions about the implemented workflow and selected Xn loss runs; broader NTN claims require the controlled experiments above.

@@ -1,0 +1,12 @@
+\section*{ABSTRACT}
+\phantomsection\addcontentsline{toc}{section}{\protect\numberline{}ABSTRACT}
+
+This thesis investigates mobility behavior in fifth-generation (5G) networks through radio-measurement data generation and handover-delay analysis. Since real-world 5G measurement campaigns require specialized equipment, repeated field tests, and stable experimental conditions, collecting detailed mobility datasets remains challenging. In addition, handover performance cannot be evaluated only from serving-cell changes, because a radio-level decision does not necessarily indicate the completion of the protocol-level handover procedure.
+
+To address these issues, this thesis develops a reproducible simulation and analysis workflow. The first part generates controlled 5G radio-measurement data during UE movement, including mobility information, serving-cell changes, radio-channel characteristics, and handover-related indicators. The second part analyzes handover delay using timer-event logs under different timer configurations and network-condition settings.
+
+The proposed workflow separates radio-level serving-cell decisions from protocol-level handover completion. This separation enables clearer observation of handover behavior and provides a basis for evaluating completion time, timeout cases, failure behavior, and recovery margin. The results show that timer configuration and network conditions have an important influence on handover performance, especially in cases where signaling delay or packet loss affects the completion process.
+
+Overall, this thesis provides a practical platform for generating 5G mobility data and analyzing handover delay beyond simple success-or-failure outcomes. The workflow can support further experiments on mobility optimization, timer configuration, and data-driven handover analysis.
+
+\cleardoublepage

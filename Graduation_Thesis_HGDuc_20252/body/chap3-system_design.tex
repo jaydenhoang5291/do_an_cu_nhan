@@ -150,7 +150,80 @@ The strongest cell is selected initially. Candidate \(c\) replaces serving cell 
 
 There is no time-to-trigger or SINR threshold. The CSV records position, height, direction, LOS, path loss, shadow fading, RSRP, received power, SINR, speed, serving BS, handover flag, and six neighbor measurements.
 
-\subsection{StormSim Handover Evaluation}
+\subsection{UE Mobility Model}
+\textcolor{red}{ADD 2 MODEL, RANDOM WALK AND MANHATTAN}
+
+Two mobility models are considered in this section: the Random Walk mobility model and the Manhattan mobility model. The Random Walk model is a basic unconstrained mobility model in which the UE changes its movement direction randomly over time \cite{bai2003}. At each movement update, the UE selects a direction and moves for a given time interval according to its speed. Because the next direction is not restricted by a road structure, the resulting trajectory may freely turn in different directions within the simulation area.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    pathline/.style={-{Stealth[scale=0.9]}, blue!70!black, line width=1.3pt},
+    point/.style={circle, fill=blue!70!black, minimum size=4pt, inner sep=0pt},
+    ue/.style={circle, draw=red!75!black, fill=red!15, minimum size=7mm}
+]
+\draw[gray!45, step=1.0] (0,0) grid (6,4);
+\draw[thick, gray!70] (0,0) rectangle (6,4);
+\coordinate (p0) at (0.7,0.8);
+\coordinate (p1) at (1.6,1.7);
+\coordinate (p2) at (2.6,1.1);
+\coordinate (p3) at (3.2,2.6);
+\coordinate (p4) at (4.4,3.1);
+\coordinate (p5) at (5.2,2.0);
+\coordinate (p6) at (4.7,0.9);
+\draw[pathline] (p0) -- (p1);
+\draw[pathline] (p1) -- (p2);
+\draw[pathline] (p2) -- (p3);
+\draw[pathline] (p3) -- (p4);
+\draw[pathline] (p4) -- (p5);
+\draw[pathline] (p5) -- (p6);
+\foreach \p in {p0,p1,p2,p3,p4,p5}
+    \node[point] at (\p) {};
+\node[ue] at (p0) {\small UE};
+\end{tikzpicture}
+\caption{Example of UE movement in the Random Walk mobility model}
+\label{fig:random-walk-mobility}
+\end{figure}
+
+In this thesis, the Random Walk model is introduced only as a reference mobility model. The implemented UE movement follows the Manhattan mobility model because the simulated scenario focuses on structured movement along an urban street grid.
+
+The Manhattan mobility model is a geographic-restriction mobility model designed to represent movement on an urban street grid \cite{bai2003}. The service area is divided into horizontal and vertical road segments that form an orthogonal grid. A UE moves only along these road segments and may travel in one of four directions: North, South, East, or West. Direction changes are permitted at intersections, where the UE may continue forward or select another valid road while remaining inside the service area.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    road/.style={gray!65, line width=2.5pt},
+    route/.style={-{Stealth[scale=0.9]}, red!75!black, line width=1.4pt},
+    intersection/.style={circle, fill=black, minimum size=3pt, inner sep=0pt}
+]
+\foreach \x in {0,1.5,3,4.5,6}
+    \draw[road] (\x,0) -- (\x,4.5);
+\foreach \y in {0,1.5,3,4.5}
+    \draw[road] (0,\y) -- (6,\y);
+\foreach \x in {0,1.5,3,4.5,6}
+    \foreach \y in {0,1.5,3,4.5}
+        \node[intersection] at (\x,\y) {};
+\draw[route] (0,1.5) -- (3,1.5) -- (3,3) -- (6,3);
+\node[circle, draw=red!75!black, fill=red!15, minimum size=7mm] at (3,3) {\small UE};
+\end{tikzpicture}
+\caption{Example of UE movement in a Manhattan street grid}
+\label{fig:manhattan-mobility}
+\end{figure}
+
+UE movement is considered continuous along each road segment. During one simulation interval, the travel distance is determined by the UE speed and the duration of the time step:
+
+\begin{equation}
+    d_{\mathrm{move}} = v \Delta t,
+\end{equation}
+
+where \(d_{\mathrm{move}}\) is the distance traveled during one time step, \(v\) is the UE speed, and \(\Delta t\) is the time-step duration. At an intersection, the movement direction may be updated according to the set of available directions. Additional behaviors such as temporary stops or gradual acceleration can also be included to represent traffic conditions, but they are not fundamental requirements of the Manhattan model.
+
+The Manhattan model provides a more structured representation of urban mobility than unconstrained random movement. As the UE moves along the street grid, its distance and relative direction to surrounding gNBs change over time. These changes lead to variations in path loss, shadow fading, RSRP, and SINR, and may eventually cause the UE to change its serving gNB. Thus, the combination of the hexagonal network model and Manhattan mobility model provides a geometric foundation for studying radio measurements and HO behavior in a cellular network.
+
+\subsection{Implementation of Handover Procedure in StormSIM}
+
+\textcolor{red}{Contents: i) 3gpp handover procedure (figures and description); ii) implementation in StormSIM; iii) evaluation metrics of HO performance: pingpong, radio failure.... - detail descprition }
+
 
 StormSim communicates with the free5GC AMF through SCTP/NGAP on N2 and supports GTP-U on N3. Loss is temporarily disabled while the UE registers and establishes a PDU session, then restored for the handover experiment.
 
@@ -187,10 +260,12 @@ In addition, the current Xn trigger explicitly assigns the new virtual radio con
 
 \textbf{TODO: cần xác nhận từ người dùng.} Identify the exact source revision and command used for each official archived result.
 
-\subsection{Evaluation Metrics}
+
+
+\subsubsection{Evaluation Metrics}
 
 The authoritative trial output records source, target, handover type, result, failure reason, and total procedure time. The metrics are success rate, failure rate, and successful-trial mean, median, and 95th-percentile delay. The log column named \texttt{pdr} currently stores \texttt{PacketLoss}; it is interpreted as loss probability in this report.
 
 \subsection{Chapter Conclusion}
 
-The design separates instantaneous radio cell selection from protocol-level execution delay, while exposing the current schema and timer-consistency issues that constrain the experiments.
+This chapter described the system design used in the thesis. It presented the radio simulation workflow, the handover-emulation workflow, the measurement-driven trigger mechanism, the recorded output fields, and the metrics used for delay and success analysis. The design also separates radio-level serving-cell behavior from protocol-level handover execution, which is necessary for interpreting the results correctly. The next chapter uses the available generated data and experiment logs to evaluate radio behavior, handover success, delay, timer behavior, and current experimental limitations.

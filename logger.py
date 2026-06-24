@@ -79,3 +79,4 @@ class SimulationLogger:
         
         df.to_csv(filepath, index=False, sep=',', decimal='.', encoding='utf-8-sig', float_format='%.2f')
         print(f"Saved single CSV for all {self.sim.num_ues} UEs: {filepath}")
+        return filepath

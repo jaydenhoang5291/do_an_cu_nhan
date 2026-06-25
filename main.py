@@ -27,13 +27,10 @@ if __name__ == "__main__":
     grid_sp = _read_float("Enter road grid spacing (m, default 200): ", 200.0)
     num_ues = _read_int("Enter number of UEs: ", 5)
 
-    use_aerial_ue = input("Use aerial UE height? (y/N): ").strip().lower().startswith('y')
-    ue_height = None
-    if use_aerial_ue:
-        ue_height = _read_ue_height_in_range(
-            f"UE height ({config.UE_HEIGHT_MIN_M:g}-{config.UE_HEIGHT_MAX_M:g} m, default 100): ",
-            100.0,
-        )
+    ue_height = _read_ue_height_in_range(
+        f"UE height ({config.UE_HEIGHT_MIN_M:g}-{config.UE_HEIGHT_MAX_M:g} m, default {config.H_UT:g}): ",
+        config.H_UT,
+    )
 
     show_lines = input("Show UE - BS connection lines? (y/N): ").strip().lower().startswith('y')
     sim = CellularNetworkReceivedPower(

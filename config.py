@@ -30,8 +30,16 @@ H_UT = 1.5      # Height of UE_ground (m)
 UE_HEIGHT_MIN_M = 1.5
 UE_HEIGHT_MAX_M = 300.0
 
-# Shadow Fading
-SF_SIGMA = {'LOS': 4.6, 'NLOS': 10.0}
+# Height-dependent UE speed ranges, in km/h.
+# The height breakpoints follow the UMa/UMa-AV ranges used by the radio model.
+# The high-altitude range is capped near the FAA small-UAS limit of 100 mph.
+UE_SPEED_RANGES_BY_HEIGHT_M_KMH = [
+    (UE_HEIGHT_MIN_M, 22.5, 20.0, 60.0),
+    (22.5, 100.0, 40.0, 100.0),
+    (100.0, UE_HEIGHT_MAX_M, 80.0, 160.0),
+]
+
+# Shadow-fading update interval
 SHADOW_FADING_UPDATE_DISTANCE_M = 25.0
 
 # UE Stop-and-Go config after turns

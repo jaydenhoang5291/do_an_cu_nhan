@@ -15,7 +15,6 @@ import config
 from mobility import GridMobility
 from radio_models import RadioModel
 from logger import SimulationLogger
-from ue import AerialUE
 
 class CellularNetworkReceivedPower:
     def __init__(
@@ -64,21 +63,17 @@ class CellularNetworkReceivedPower:
         self.h_bs, self.h_ut = config.H_BS, config.H_UT
         self.ue_height_m = self._validate_ue_height(ue_height_m)
 
-        # Shadow fading 
-        self.sf_sigma = config.SF_SIGMA
+        # Shadow fading
         self.shadow_fading_update_distance_m = config.SHADOW_FADING_UPDATE_DISTANCE_M
         self.sf_cache = {}
 
         # UE
         self.num_ues = int(num_ues)
         self.ue_colors = ['green', 'purple', 'orange', 'cyan', 'magenta', 'yellow', 'black']
-        self.ue_speeds = np.random.uniform(20.0, 60.0, self.num_ues)  # km/h
+        self.ue_speed_min_kmh, self.ue_speed_max_kmh = self._speed_range_for_height(self.ue_height_m)
+        self.ue_speeds = np.random.uniform(self.ue_speed_min_kmh, self.ue_speed_max_kmh, self.num_ues)
         self.ue_speeds_ms = self.ue_speeds * (1000.0 / 3600.0)
         self.ue_heights_m = np.full(self.num_ues, self.ue_height_m, dtype=float)
-        self.aerial_ues = [
-            AerialUE(height_m=self.ue_height_m, speed_mps=float(self.ue_speeds_ms[i]))
-            for i in range(self.num_ues)
-        ] if self.is_aerial_ue else []
 
         self.steps = int(config.SIMULATION_STEPS)
         self.time_per_step = float(config.TIME_PER_STEP_S)
@@ -146,9 +141,17 @@ class CellularNetworkReceivedPower:
             )
         return height
 
-    @property
-    def is_aerial_ue(self) -> bool:
-        return float(self.ue_height_m) > float(config.H_UT)
+    @staticmethod
+    def _speed_range_for_height(height_m: float) -> tuple[float, float]:
+        height = float(height_m)
+        for idx, (low, high, speed_min, speed_max) in enumerate(config.UE_SPEED_RANGES_BY_HEIGHT_M_KMH):
+            in_range = (low <= height <= high) if idx == 0 else (low < height <= high)
+            if in_range:
+                return float(speed_min), float(speed_max)
+        raise ValueError(
+            "UE height does not match a configured speed range "
+            f"({height:g} m)"
+        )
 
     def get_ue_height_m(self, ue_idx: int) -> float:
         return float(self.ue_heights_m[ue_idx])

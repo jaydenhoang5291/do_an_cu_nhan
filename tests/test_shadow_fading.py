@@ -5,6 +5,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 
+import config
 from radio_models import uma_av_shadow_fading_sigma
 from simulation import CellularNetworkReceivedPower
 
@@ -64,7 +65,7 @@ class UMaAVShadowFadingTests(unittest.TestCase):
             seed=1,
         )
 
-        sigma = sim.sf_sigma['LOS']
+        sigma = uma_av_shadow_fading_sigma(True, config.H_UT)
         with patch("radio_models.np.random.normal", return_value=10.0 * sigma):
             high = sim.radio_model.shadow_fading(0, 0, True, (5000.0, 5000.0))
 

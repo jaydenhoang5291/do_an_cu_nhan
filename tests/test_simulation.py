@@ -1,6 +1,8 @@
 import unittest
 from unittest.mock import patch
 import math
+import os
+import tempfile
 
 import matplotlib
 
@@ -23,7 +25,7 @@ class SimulationBSTests(unittest.TestCase):
         )
 
         self.assertTrue(all(height == sim.h_bs for height in sim.bs_heights))
-        self.assertTrue(sim.is_aerial_ue)
+        self.assertEqual(sim.get_ue_height_m(0), 100.0)
 
     def test_aerial_ue_uses_los_probability_with_ground_bs(self):
         sim = CellularNetworkReceivedPower(
@@ -184,6 +186,78 @@ class SimulationBSTests(unittest.TestCase):
                         show_link_lines=False,
                         seed=1,
                     )
+
+    def test_ue_speed_range_depends_on_height(self):
+        cases = [
+            (1.5, 20.0, 60.0),
+            (22.5, 20.0, 60.0),
+            (50.0, 40.0, 100.0),
+            (200.0, 80.0, 160.0),
+        ]
+
+        for height_m, expected_min, expected_max in cases:
+            with self.subTest(height_m=height_m):
+                sim = CellularNetworkReceivedPower(
+                    num_ues=3,
+                    rect_len_m=1000.0,
+                    rect_wid_m=1000.0,
+                    ue_height_m=height_m,
+                    fast_mode=True,
+                    show_link_lines=False,
+                    seed=1,
+                )
+
+                self.assertEqual(sim.ue_speed_min_kmh, expected_min)
+                self.assertEqual(sim.ue_speed_max_kmh, expected_max)
+                self.assertTrue(all(expected_min <= speed <= expected_max for speed in sim.ue_speeds))
+
+    def test_multi_ue_log_includes_each_ue_speed_column(self):
+        sim = CellularNetworkReceivedPower(
+            num_ues=3,
+            rect_len_m=1000.0,
+            rect_wid_m=1000.0,
+            ue_height_m=50.0,
+            fast_mode=True,
+            show_link_lines=False,
+            seed=1,
+        )
+
+        for ue_idx in range(3):
+            self.assertIn(f'ue{ue_idx}_speed', sim.data_log)
+
+    def test_single_ue_csv_filename_includes_height_and_speed(self):
+        sim = CellularNetworkReceivedPower(
+            num_ues=1,
+            rect_len_m=1000.0,
+            rect_wid_m=1000.0,
+            ue_height_m=50.0,
+            fast_mode=True,
+            show_link_lines=False,
+            seed=1,
+        )
+        sim.ue_speeds[0] = 88.5
+        sim.logger.log_step(0)
+        sim.logger.log_ue_data(
+            0,
+            x=0.0,
+            y=0.0,
+            bs=None,
+            sinr=None,
+            handover_flag=0,
+            neighbors=[],
+        )
+
+        old_cwd = os.getcwd()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            try:
+                os.chdir(tmpdir)
+                sim.logger.save_data_to_csv()
+                files = os.listdir(os.path.join(tmpdir, "data"))
+            finally:
+                os.chdir(old_cwd)
+
+        self.assertEqual(len(files), 1)
+        self.assertIn("_1_UE_h50m_v88p5kmh_Data.csv", files[0])
 
     def test_los_probability_and_state_are_logged(self):
         sim = CellularNetworkReceivedPower(

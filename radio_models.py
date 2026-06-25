@@ -198,15 +198,11 @@ class RadioModel:
 
     def shadow_fading(self, ue_idx, bs_idx, los, ue_pos):
         state = self._link_state(ue_idx, bs_idx)
-        if self.sim.is_aerial_ue:
-            if 'los' not in state:
-                state['los'] = bool(los)
-            link_los = bool(state['los'])
-            h_UT = self.sim.get_ue_height_m(ue_idx)
-            sigma = uma_av_shadow_fading_sigma(link_los, h_UT)
-        else:
-            link_los = bool(los)
-            sigma = self.sim.sf_sigma['LOS'] if link_los else self.sim.sf_sigma['NLOS']
+        if 'los' not in state:
+            state['los'] = bool(los)
+        link_los = bool(state['los'])
+        h_UT = self.sim.get_ue_height_m(ue_idx)
+        sigma = uma_av_shadow_fading_sigma(link_los, h_UT)
 
         def sample_shadow_fading() -> float:
             return float(np.clip(np.random.normal(0.0, sigma), -3.0 * sigma, 3.0 * sigma))

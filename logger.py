@@ -11,6 +11,10 @@ class SimulationLogger:
     def __init__(self, sim):
         self.sim = sim
 
+    @staticmethod
+    def _tag_number(value: float) -> str:
+        return f"{float(value):g}".replace(".", "p")
+
     def setup_log(self):
         self.sim.data_log = {'Step': []}
         for i in range(self.sim.num_ues):
@@ -74,7 +78,12 @@ class SimulationLogger:
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
-        filename = f"{timestamp}_{self.sim.num_ues}_UE_Data.csv"
+        if self.sim.num_ues == 1:
+            height_tag = self._tag_number(self.sim.get_ue_height_m(0))
+            speed_tag = self._tag_number(self.sim.ue_speeds[0])
+            filename = f"{timestamp}_1_UE_h{height_tag}m_v{speed_tag}kmh_Data.csv"
+        else:
+            filename = f"{timestamp}_{self.sim.num_ues}_UE_Data.csv"
         filepath = os.path.join("data", filename)
         
         df.to_csv(filepath, index=False, sep=',', decimal='.', encoding='utf-8-sig', float_format='%.2f')

@@ -6,9 +6,9 @@ The main elements of a cellular mobile network include the UE, the radio access 
 
 A key characteristic of cellular systems is mobility support. Since a UE may move within a cell or from one cell to another, the network must continuously maintain service continuity and decide which BS should serve the UE. When the UE moves toward a neighboring cell and the serving condition changes, a handover (HO) procedure may be performed to transfer the connection from the current serving cell to a target cell. Therefore, the cellular concept is closely related to coverage planning, neighboring-cell relationships, radio-resource management, and mobility management.
 
-Based on this cellular principle, mobile networks have evolved from early voice-oriented systems to broadband and intelligent communication systems. In 5G, the cellular architecture is extended by the New Radio (NR) air interface, gNB-based radio access, dense deployment, massive multiple-input multiple-output (MIMO), beamforming, network slicing, and 5G Core (5GC) connectivity \cite{3gpp_38300}. Looking beyond 5G, 6G is expected to further enhance cellular networks by integrating artificial intelligence, sensing, ultra-dense connectivity, and new spectrum technologies to support more advanced communication scenarios.
+Based on this cellular principle, mobile networks have evolved from early voice-oriented systems to broadband and intelligent communication systems. In 5G, the cellular architecture is extended by the New Radio (NR) air interface, gNB-based radio access, dense deployment, massive multiple-input multiple-output (MIMO), beamforming, network slicing, and 5G Core (5GC) connectivity \cite{3gpp_38300}. Looking beyond 5G, 6G is expected to further enhance cellular networks by integrating artificial intelligence, sensing, ultra-dense connectivity, and new spectrum technologies to support more advanced communication scenarios. This 6G perspective is mentioned only as background motivation, because the experimental work in this thesis remains focused on 5G-oriented radio measurements and handover behavior.
 
-The network layout determines the relative positions of serving and neighboring gNBs, while the mobility model determines how the UE position changes over time. These two elements directly influence propagation distance, received signal strength, interference, and mobility-related events. This thesis considers a hexagonal cellular layout and the Manhattan mobility model as the theoretical basis for representing the network geometry and UE movement.
+The network layout determines the relative positions of serving and neighboring gNBs. It directly influences propagation distance, received signal strength, interference, and mobility-related events. This thesis uses a hexagonal cellular layout as the theoretical basis for representing the network geometry.
 
 %\subsubsection{Hexagonal Cellular Network Model}
 
@@ -83,37 +83,12 @@ Air-to-ground (A2G) communication extends this model by considering a UAV or aer
 
 As the UAV moves, these link conditions can change continuously. A higher altitude may improve visibility to the serving gNB, but it may also expose the UAV to stronger interference from multiple neighboring gNBs; this LOS-dominant channel and aerial-terrestrial interference are highlighted as key issues for UAV communications in 5G and beyond \cite{zeng2019accessing}. For this reason, received signal levels and link conditions may vary rapidly in A2G scenarios. These variations make A2G communication an important case for studying radio measurement behavior and mobility-related problems in 5G networks.
 
+Figure~\ref{fig:a2g-radio-scenario} illustrates the A2G geometry considered in this thesis. It connects the main physical quantities used later in the radio-measurement model: UE height, horizontal distance, three-dimensional link distance, the serving link, and interference from neighboring gNBs.
+
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}[scale=0.9, every node/.style={font=\small}]
-    \draw[thick] (-1.2,0) -- (8.0,0);
-
-    \coordinate (serving) at (1.0,1.15);
-    \coordinate (ue) at (4.1,3.2);
-    \coordinate (ueproj) at (4.1,0);
-    \coordinate (intone) at (6.7,1.15);
-    \coordinate (inttwo) at (-0.4,1.15);
-
-    \foreach \x/\name in {1.0/Serving gNB,6.7/Neighbor gNB,-0.4/Neighbor gNB}{
-        \draw[thick] (\x,0) -- (\x,1.05);
-        \draw[thick] (\x-0.32,0) -- (\x,1.05) -- (\x+0.32,0);
-        \draw[thick] (\x-0.45,1.15) -- (\x+0.45,1.15);
-        \node[below] at (\x,0) {\name};
-    }
-
-    \draw[fill=gray!15, thick] (ue) circle (0.18);
-    \node[above] at (ue) {Aerial UE};
-    \draw[densely dotted] (ue) -- (ueproj);
-
-    \draw[arrow] (serving) -- node[above, sloped] {serving link} (ue);
-    \draw[arrow, dashed] (intone) -- node[above, sloped] {interference} (ue);
-    \draw[arrow, dashed] (inttwo) -- (ue);
-
-    \draw[<->] (1.0,-0.35) -- node[below] {\(d_{2D}\)} (4.1,-0.35);
-    \draw[<->] (4.35,0) -- node[right] {\(h_{\mathrm{UE}}\)} (4.35,3.2);
-    \draw[<->] (1.12,1.34) -- node[above, sloped] {\(d_{3D}\)} (3.95,3.18);
-\end{tikzpicture}
-\caption{A2G radio scenario with serving-gNB connection, neighboring-gNB interference, and geometry-dependent link measurements}
+\includegraphics[width=0.95\textwidth]{Images/uav_bs.png}
+\caption{A2G geometry used to interpret UE height, serving-link distance, and neighboring-cell interference}
 \label{fig:a2g-radio-scenario}
 \end{figure}
 
@@ -386,7 +361,7 @@ where \(\sigma_{\mathrm{SF}}\) is selected from the corresponding LOS/NLOS and U
 \end{cases}
 \end{equation}
 
-For the default ground-UE mode, the implementation can also use fixed configured values, \(\sigma_{\mathrm{SF}}=4.6\) dB for LOS and \(10\) dB for NLOS, as defined in \texttt{config.py}. This separates the baseline terrestrial configuration from the UMa-AV height-dependent configuration used for aerial-UE studies.
+The implementation uses the same UMa/UMa-AV wrapper functions for all UE heights. When \(h_{\mathrm{UE}}=1.5\) m, these functions reduce to the low-height UMa case. The only ground-default difference in the shadow-fading implementation is that, when no elevated UE height is enabled, the standard deviation is taken from the fixed values in \texttt{config.py}: \(\sigma_{\mathrm{SF}}=4.6\) dB for LOS and \(10\) dB for NLOS.
 
 The sampled value is clipped to the interval \([-3\sigma_{\mathrm{SF}},3\sigma_{\mathrm{SF}}]\). This clipping avoids unrealistically large random losses in finite simulation traces while preserving the zero-mean Gaussian behaviour for most samples. The received power including shadow fading is then
 

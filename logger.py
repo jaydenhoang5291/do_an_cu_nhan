@@ -11,6 +11,34 @@ class SimulationLogger:
     def __init__(self, sim):
         self.sim = sim
 
+    @staticmethod
+    def _format_number_for_filename(value) -> str:
+        text = f"{float(value):.2f}".rstrip('0').rstrip('.')
+        return text.replace('-', 'neg').replace('.', 'p')
+
+    def _data_filename(self, timestamp: str) -> str:
+        heights = [self.sim.get_ue_height_m(i) for i in range(self.sim.num_ues)]
+        speed_min = min(float(speed) for speed in self.sim.ue_speeds)
+        speed_max = max(float(speed) for speed in self.sim.ue_speeds)
+
+        if len(set(round(height, 2) for height in heights)) == 1:
+            height_tag = f"h{self._format_number_for_filename(heights[0])}m"
+        else:
+            height_tag = (
+                f"h{self._format_number_for_filename(min(heights))}-"
+                f"{self._format_number_for_filename(max(heights))}m"
+            )
+
+        if round(speed_min, 2) == round(speed_max, 2):
+            speed_tag = f"v{self._format_number_for_filename(speed_min)}kmh"
+        else:
+            speed_tag = (
+                f"v{self._format_number_for_filename(speed_min)}-"
+                f"{self._format_number_for_filename(speed_max)}kmh"
+            )
+
+        return f"{timestamp}_{self.sim.num_ues}_UE_{height_tag}_{speed_tag}_Data.csv"
+
     def setup_log(self):
         self.sim.data_log = {'Step': []}
         for i in range(self.sim.num_ues):
@@ -74,7 +102,7 @@ class SimulationLogger:
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
-        filename = f"{timestamp}_{self.sim.num_ues}_UE_Data.csv"
+        filename = self._data_filename(timestamp)
         filepath = os.path.join("data", filename)
         
         df.to_csv(filepath, index=False, sep=',', decimal='.', encoding='utf-8-sig', float_format='%.2f')

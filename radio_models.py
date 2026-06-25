@@ -146,6 +146,41 @@ def uma_av_shadow_fading_sigma(los: bool, h_UT: float) -> float:
 class RadioModel:
     def __init__(self, sim):
         self.sim = sim
+        self._bs_arrays_cache = None
+        self._interferer_cache = {}
+        self._active_subcarriers = None
+        self._rsrp_offset_db = None
+        self._thermal_noise_dbm = None
+        self._thermal_noise_mw = None
+
+    def _bs_position_arrays(self):
+        cache = self._bs_arrays_cache
+        if cache is not None and cache[0] == len(self.sim.bs_positions):
+            return cache[1], cache[2]
+
+        if not self.sim.bs_positions:
+            x_arr = np.array([], dtype=float)
+            y_arr = np.array([], dtype=float)
+        else:
+            positions = np.asarray(self.sim.bs_positions, dtype=float)
+            x_arr = positions[:, 0]
+            y_arr = positions[:, 1]
+        self._bs_arrays_cache = (len(self.sim.bs_positions), x_arr, y_arr)
+        self._interferer_cache.clear()
+        return x_arr, y_arr
+
+    def _nearest_bs_indices(self, ue_x, ue_y, count: int) -> list[int]:
+        x_arr, y_arr = self._bs_position_arrays()
+        n_bs = len(x_arr)
+        if n_bs == 0:
+            return []
+        if count >= n_bs:
+            return list(range(n_bs))
+
+        dist2 = (x_arr - float(ue_x)) ** 2 + (y_arr - float(ue_y)) ** 2
+        nearest = np.argpartition(dist2, count - 1)[:count]
+        nearest = nearest[np.argsort(dist2[nearest])]
+        return [int(idx) for idx in nearest]
 
     # Calculate 2D and 3D distances between UE and BS, ensuring minimum 3D distance of 1m to avoid singularities
     def calculate_distances(self, ue_x, ue_y, bs_idx: int, ue_idx: int | None = None):
@@ -241,10 +276,12 @@ class RadioModel:
         return float(self.sim.bs_ptx[bs_idx])
 
     def active_lte_subcarrier_count(self) -> float:
-        n_subcarriers = float(self.sim.lte_n_rb * self.sim.lte_n_subcarriers_per_rb)
-        if n_subcarriers <= 0.0:
-            raise ValueError("LTE RB/subcarrier configuration must be positive")
-        return n_subcarriers
+        if self._active_subcarriers is None:
+            n_subcarriers = float(self.sim.lte_n_rb * self.sim.lte_n_subcarriers_per_rb)
+            if n_subcarriers <= 0.0:
+                raise ValueError("LTE RB/subcarrier configuration must be positive")
+            self._active_subcarriers = n_subcarriers
+        return self._active_subcarriers
 
     # Calculate total received power in dBm at the UE from a given BS index and path loss, including shadow fading.
     def calculate_total_received_power(self, bs_idx: int, path_loss_db: float) -> float:
@@ -256,37 +293,49 @@ class RadioModel:
         # by assuming BS power is spread uniformly over active LTE subcarriers.
         # This follows the LTE RB structure and RSRP definition, but is not an
         # exact 3GPP PHY CRS power formula.
-        return float(float(prx_dbm) - 10.0 * np.log10(self.active_lte_subcarrier_count()))
+        if self._rsrp_offset_db is None:
+            self._rsrp_offset_db = 10.0 * np.log10(self.active_lte_subcarrier_count())
+        return float(float(prx_dbm) - self._rsrp_offset_db)
 
     def calculate_rsrp(self, bs_idx: int, path_loss_db: float) -> float:
         prx_dbm = self.calculate_total_received_power(bs_idx, path_loss_db)
         return self.calculate_rsrp_from_received_power(prx_dbm)
 
     def thermal_noise_power_dbm(self) -> float:
-        bandwidth = float(self.sim.bandwidth)              # Hz
-        noise_figure = float(self.sim.ue_noise_figure)    # dB
-        if bandwidth <= 0.0:
-            raise ValueError("Bandwidth must be positive to calculate thermal noise")
+        if self._thermal_noise_dbm is None:
+            bandwidth = float(self.sim.bandwidth)              # Hz
+            noise_figure = float(self.sim.ue_noise_figure)    # dB
+            if bandwidth <= 0.0:
+                raise ValueError("Bandwidth must be positive to calculate thermal noise")
 
-        # Thermal noise is a receiver/bandwidth property, not a function of Prx.
-        # -174 dBm/Hz is the thermal noise density at room temperature.
-        return float(-174.0 + 10.0 * np.log10(bandwidth) + noise_figure)
+            # Thermal noise is a receiver/bandwidth property, not a function of Prx.
+            # -174 dBm/Hz is the thermal noise density at room temperature.
+            self._thermal_noise_dbm = float(-174.0 + 10.0 * np.log10(bandwidth) + noise_figure)
+        return self._thermal_noise_dbm
 
-    def get_interfering_bs_indices(self, serving_bs_idx: int, count: int = 6) -> list[int]:
-        serving_x, serving_y = self.sim.bs_positions[serving_bs_idx]
-        neighbors = []
+    def get_interfering_bs_indices(self, serving_bs_idx: int, count: int | None = None) -> list[int]:
+        if count is None:
+            count = int(getattr(config, "INTERFERING_BS_COUNT", 6))
+        cache_key = (int(serving_bs_idx), int(count))
+        if cache_key in self._interferer_cache:
+            return self._interferer_cache[cache_key]
 
-        for bs_idx, (bs_x, bs_y) in enumerate(self.sim.bs_positions):
-            if bs_idx == serving_bs_idx:
-                continue
+        x_arr, y_arr = self._bs_position_arrays()
+        n_bs = len(x_arr)
+        if n_bs <= 1:
+            self._interferer_cache[cache_key] = []
+            return []
 
-            # In the hexagonal layout, the six nearest BSs around the serving
-            # BS approximate the first-tier co-channel interference cells.
-            distance = float(np.hypot(float(bs_x) - serving_x, float(bs_y) - serving_y))
-            neighbors.append((bs_idx, distance))
-
-        neighbors.sort(key=lambda item: item[1])
-        return [bs_idx for bs_idx, _ in neighbors[:count]]
+        serving_x = x_arr[serving_bs_idx]
+        serving_y = y_arr[serving_bs_idx]
+        dist2 = (x_arr - serving_x) ** 2 + (y_arr - serving_y) ** 2
+        dist2[serving_bs_idx] = np.inf
+        neighbor_count = min(int(count), n_bs - 1)
+        nearest = np.argpartition(dist2, neighbor_count - 1)[:neighbor_count]
+        nearest = nearest[np.argsort(dist2[nearest])]
+        result = [int(idx) for idx in nearest]
+        self._interferer_cache[cache_key] = result
+        return result
 
     def calculate_interference_power_mw(self, ue_idx: int, serving_bs_idx: int) -> float:
         interference_mw = 0.0
@@ -311,21 +360,26 @@ class RadioModel:
         # All powers must be converted from dBm to mW before summing/dividing.
         signal_mw = 10.0 ** (float(prx_dbm) / 10.0)
         interference_mw = self.calculate_interference_power_mw(ue_idx, serving_bs_idx)
-        noise_mw = 10.0 ** (self.thermal_noise_power_dbm() / 10.0)
+        if self._thermal_noise_mw is None:
+            self._thermal_noise_mw = 10.0 ** (self.thermal_noise_power_dbm() / 10.0)
+        noise_mw = self._thermal_noise_mw
 
         sinr_lin = signal_mw / (interference_mw + noise_mw)
         sinr_db = 10.0 * np.log10(sinr_lin) if sinr_lin > 0 else -np.inf
         return float(sinr_db)
     
     def get_serving_bs(self, ue_x, ue_y, ue_idx):
-        neighbor_count = 6
-        candidate_indices = list(range(len(self.sim.bs_positions)))
+        neighbor_count = int(getattr(config, "INTERFERING_BS_COUNT", 6))
+        candidate_count = int(getattr(config, "SERVING_BS_CANDIDATES", 12))
+        candidate_indices = self._nearest_bs_indices(ue_x, ue_y, candidate_count)
 
         if not candidate_indices:
             self.sim.ue_serving_bs[ue_idx] = None
             return None, None, None, []
 
         current_bs = self.sim.ue_serving_bs[ue_idx]
+        if current_bs is not None and current_bs not in candidate_indices:
+            candidate_indices.append(int(current_bs))
         cand = []
         for i in candidate_indices:
             pl_base, los_i, _ = self.calculate_path_loss(ue_x, ue_y, i, ue_idx)

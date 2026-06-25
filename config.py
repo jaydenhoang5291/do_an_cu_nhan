@@ -19,6 +19,10 @@ UE_NOISE_FIGURE = 9.0    # dB
 
 HOM = 3.0
 
+# Runtime acceleration: evaluate handover candidates among nearby BSs only.
+SERVING_BS_CANDIDATES = 12
+INTERFERING_BS_COUNT = 6
+
 # Downlink resource grid assumptions for system-level RSRP approximation
 # Based on 3GPP TS 36.104 Table 5.6-1 for 10 MHz bandwidth
 LTE_N_RB = 50

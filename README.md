@@ -10,7 +10,7 @@ This project is a Python-based cellular network simulator that visualizes and lo
 - `mobility.py`: Implements the `GridMobility` class for the Manhattan mobility model. Keeps UEs constrained to the generated road grid, handles intersections, directional turns, and simulating realistic stop-and-go behavior after turns.
 - `radio_models.py`: Implements the `RadioModel` class. Handles distance calculation, line-of-sight (LOS) and non-line-of-sight (NLOS) path loss, correlated shadow fading penalty, received power, Signal-to-Interference-Plus-Noise Ratio (SINR), and base station association (incorporating Handover Margin - HOM).
 - `hexagons.py`: Generates a hexagonal grid topology for deploying Ground Base Stations across the simulation map (`build_hex_cover`).
-- `logger.py`: Implements `SimulationLogger` to continuously track information (position, direction, connected BS, received power, SINR, speed, handover events) per UE at each simulation step, saving the result sequentially into a `.csv` file in the `data/` directory.
+- `logger.py`: Implements `SimulationLogger` to continuously track information (position, direction, connected BS, received power, SINR, speed, handover events) per UE at each simulation step, saving the result sequentially into a `.csv` file under the matching height-range folder in `data/`.
 - `utils.py`: Helper functions for reading typed user inputs (`_read_float`, `_read_int`).
 
 ## Features
@@ -23,7 +23,8 @@ This project is a Python-based cellular network simulator that visualizes and lo
 - **Radio Propagation Engine**: Accounts for frequency-specific Free Space Path Loss (FSPL), Shadow Fading with geographical correlation and turn penalties, interference from neighboring cells, and SINR.
 - **Handover Management**: Evaluates the received signal strength to perform cell handovers when a candidate BS signal strength exceeds the current BS by the Handover Margin (`HOM`).
 - **Interactive Visualization**: Uses `matplotlib` to render a live playback of the simulation showing paths, UE movement, BS coverage areas, and active link connections.
-- **Automated Data Logging**: Saves trace parameters per frame into a unified CSV format for post-simulation analysis.
+- **Headless CSV Generation**: Supports a non-UI run for faster dataset generation with `python main.py --headless`.
+- **Automated Data Logging**: Saves trace parameters per frame into a unified CSV format for post-simulation analysis, grouped by UE-height range.
 
 ## Usage
 
@@ -40,7 +41,30 @@ You will be prompted to enter parameters:
 4. UE height in the supported 1.5--300 m range.
 5. Show UE - BS connection lines (y/N).
 
-Once the inputs are collected, a matplotlib window will load. You can **Stop/Continue** or **Restart** the simulation using the provided UI buttons. When you close the window (or upon simulation end), the logged data is saved to a timestamped CSV inside the `data/` folder.
+Once the inputs are collected, a matplotlib window will load. You can **Stop/Continue** or **Restart** the simulation using the provided UI buttons. When you close the window (or upon simulation end), the logged data is saved to a timestamped CSV inside the matching height-range folder under `data/`.
+
+To generate CSV data without opening the UI, run:
+
+```bash
+python main.py --headless
+```
+
+Headless mode asks for the simulation parameters, skips the UI-only connection-line prompt, then runs to completion without opening the matplotlib window and saves the timestamped CSV inside the matching height-range folder under `data/`.
+
+CSV output folders are selected from the entered UE height:
+
+- `data/H0_1p5_13m/`: `1.5 <= h <= 13` m
+- `data/H1_13_22p5m/`: `13 < h <= 22.5` m
+- `data/H2_22p5_100m/`: `22.5 < h <= 100` m
+- `data/H3_100_300m/`: `100 < h <= 300` m
+
+To generate a batch dataset for all four height scenarios, run:
+
+```bash
+python generate_height_scenario_data.py --runs-per-scenario 50 --seed 20260626 --random-area
+```
+
+The batch script runs the simulator in headless mode, keeps the simulator CSV naming format, and saves each file into the H0-H3 folder selected from the random UE height.
 
 ## Requirements
 - Python 3.x

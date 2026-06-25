@@ -26,6 +26,7 @@ class CellularNetworkReceivedPower:
         ue_height_m: float | None = None,
         fast_mode: bool = True,
         show_link_lines: bool = True,
+        headless: bool = False,
         seed: int | None = None,
     ):
         if seed is not None:
@@ -79,11 +80,13 @@ class CellularNetworkReceivedPower:
         self.time_per_step = float(config.TIME_PER_STEP_S)
         self.pause_s = (0.03 if fast_mode else 0.08)
         self.show_link_lines = bool(show_link_lines)
+        self.headless = bool(headless)
 
         # BS hex layout
         self.scale_factor = 500.0
         self.hexes = build_hex_cover(self.scale_factor, self.width, self.height, self.center, self.rect_xmin, self.rect_xmax, self.rect_ymin, self.rect_ymax)
         self.bs_positions, self.bs_heights, self.bs_ptx = [], [], []
+        self._setup_base_stations()
 
         # UE state
         self.ue_positions = []
@@ -103,29 +106,43 @@ class CellularNetworkReceivedPower:
         self.ue_ramp_step = [-1] * self.num_ues
         self.ue_speed_factor = np.ones(self.num_ues, dtype=float)
 
-        # UI + plot
-        plt.ion()
-        self.fig = plt.figure(figsize=(12.5, 10))
-        self.ax = self.fig.add_axes([0.05, 0.1, 0.68, 0.82])
-        # Right-side panels are stacked with explicit gaps so titles cannot
-        # overlap neighboring panels when Matplotlib scales fonts differently.
-        right_x = 0.78
-        right_w = 0.19
-        self.height_ax = self.fig.add_axes([right_x, 0.68, right_w, 0.21])
-        self.ue_info_ax = self.fig.add_axes([right_x, 0.42, right_w, 0.15])
-        self.bs_table_ax = self.fig.add_axes([right_x, 0.10, right_w, 0.25])
-        self.toggle_ax = self.fig.add_axes([0.08, 0.02, 0.12, 0.05])
-        self.restart_ax = self.fig.add_axes([0.22, 0.02, 0.14, 0.05])
-        self.toggle_button = Button(self.toggle_ax, 'Stop', color='lightcoral')
-        self.restart_button = Button(self.restart_ax, 'Restart', color='lightgreen')
-        self.toggle_button.on_clicked(self.toggle_animation)
-        self.restart_button.on_clicked(self.restart_animation)
         self.animation_running = True
 
         # Logging
         self.logger.setup_log()
 
-        self.setup_plot()
+        if self.headless:
+            self.fig = None
+            self.ax = None
+            self.height_ax = None
+            self.ue_info_ax = None
+            self.bs_table_ax = None
+            self.toggle_ax = None
+            self.restart_ax = None
+            self.toggle_button = None
+            self.restart_button = None
+            self.ue_points = []
+            self.ue_lines = []
+        else:
+            # UI + plot
+            plt.ion()
+            self.fig = plt.figure(figsize=(12.5, 10))
+            self.ax = self.fig.add_axes([0.05, 0.1, 0.68, 0.82])
+            # Right-side panels are stacked with explicit gaps so titles cannot
+            # overlap neighboring panels when Matplotlib scales fonts differently.
+            right_x = 0.78
+            right_w = 0.19
+            self.height_ax = self.fig.add_axes([right_x, 0.68, right_w, 0.21])
+            self.ue_info_ax = self.fig.add_axes([right_x, 0.42, right_w, 0.15])
+            self.bs_table_ax = self.fig.add_axes([right_x, 0.10, right_w, 0.25])
+            self.toggle_ax = self.fig.add_axes([0.08, 0.02, 0.12, 0.05])
+            self.restart_ax = self.fig.add_axes([0.22, 0.02, 0.14, 0.05])
+            self.toggle_button = Button(self.toggle_ax, 'Stop', color='lightcoral')
+            self.restart_button = Button(self.restart_ax, 'Restart', color='lightgreen')
+            self.toggle_button.on_clicked(self.toggle_animation)
+            self.restart_button.on_clicked(self.restart_animation)
+            self.setup_plot()
+
         self.setup_ues()
 
     @staticmethod
@@ -156,6 +173,16 @@ class CellularNetworkReceivedPower:
     def get_ue_height_m(self, ue_idx: int) -> float:
         return float(self.ue_heights_m[ue_idx])
 
+    def _setup_base_stations(self):
+        self.bs_positions.clear()
+        self.bs_heights.clear()
+        self.bs_ptx.clear()
+        for hex_obj in self.hexes:
+            x, y = axial_to_pixel(hex_obj.q, hex_obj.r, self.scale_factor)
+            self.bs_positions.append((x + self.center, y + self.center))
+            self.bs_heights.append(self.h_bs)
+            self.bs_ptx.append(self.ptx)
+
     def setup_plot(self):
         # Roads (grid)
         for x in self.x_lines:
@@ -169,16 +196,8 @@ class CellularNetworkReceivedPower:
                                     linestyle='--', zorder=5))
 
         # BS from hex grid
-        self.bs_positions.clear()
-        self.bs_heights.clear()
-        self.bs_ptx.clear()
         bs_colors = ['red', 'green', 'blue', 'cyan', 'magenta', 'yellow', 'black', 'orange', 'purple', 'brown']
-        for idx, hex_obj in enumerate(self.hexes):
-            x, y = axial_to_pixel(hex_obj.q, hex_obj.r, self.scale_factor)
-            cx, cy = x + self.center, y + self.center
-            self.bs_positions.append((cx, cy))
-            self.bs_heights.append(self.h_bs)
-            self.bs_ptx.append(self.ptx)
+        for idx, (hex_obj, (cx, cy)) in enumerate(zip(self.hexes, self.bs_positions)):
             self.ax.plot(cx, cy, marker='^', color=bs_colors[idx % len(bs_colors)],
                          markersize=5, zorder=6)
             self.ax.text(
@@ -496,14 +515,15 @@ class CellularNetworkReceivedPower:
             self.mobility.step_manhattan_on_grid(ue_idx, d)
 
             x, y = self.ue_positions[ue_idx]
-            self.ue_points[ue_idx].set_data([x], [y])
+            if not self.headless:
+                self.ue_points[ue_idx].set_data([x], [y])
 
             bs, serving_rsrp, dist, neighbors = self.radio_model.get_serving_bs(x, y, ue_idx)
 
-            if bs is not None and self.show_link_lines:
+            if not self.headless and bs is not None and self.show_link_lines:
                 self.ue_lines[ue_idx].set_data([x, self.bs_positions[bs][0]],
                                                [y, self.bs_positions[bs][1]])
-            else:
+            elif not self.headless:
                 self.ue_lines[ue_idx].set_data([], [])
 
             if bs is not None:
@@ -527,11 +547,12 @@ class CellularNetworkReceivedPower:
                 self.ue_handover_count[ue_idx] += 1
             self.previous_serving_bs[ue_idx] = bs
 
-            link_color = self.link_quality_color(serving_rsrp)
-            self.ue_points[ue_idx].set_color(link_color)
-            self.ue_points[ue_idx].set_markeredgecolor('black')
-            self.ue_points[ue_idx].set_markeredgewidth(0.4)
-            self.ue_lines[ue_idx].set_color(link_color)
+            if not self.headless:
+                link_color = self.link_quality_color(serving_rsrp)
+                self.ue_points[ue_idx].set_color(link_color)
+                self.ue_points[ue_idx].set_markeredgecolor('black')
+                self.ue_points[ue_idx].set_markeredgewidth(0.4)
+                self.ue_lines[ue_idx].set_color(link_color)
 
             self.logger.log_ue_data(
                 ue_idx, x, y, bs, sinr, handover_flag, neighbors,
@@ -543,7 +564,7 @@ class CellularNetworkReceivedPower:
                 shadow_fading_db=sf_db
             )
 
-            if ue_idx == 0:
+            if not self.headless and ue_idx == 0:
                 self.update_selected_ue_info(
                     ue_idx,
                     x,
@@ -558,9 +579,10 @@ class CellularNetworkReceivedPower:
                 )
                 self.update_bs_power_table(ue_idx, bs, serving_rsrp, neighbors)
 
-        self.time_text.set_text(f'Step: {frame}')
-        self.fig.canvas.draw()
-        self.fig.canvas.flush_events()
+        if not self.headless:
+            self.time_text.set_text(f'Step: {frame}')
+            self.fig.canvas.draw()
+            self.fig.canvas.flush_events()
 
     def run_animation(self):
         self.animation_running = True
@@ -574,7 +596,8 @@ class CellularNetworkReceivedPower:
             if not self.animation_running:
                 break
             self.update(frame)
-            plt.pause(self.pause_s)
+            if not self.headless:
+                plt.pause(self.pause_s)
             
         if self.animation_running and getattr(self, 'current_frame', -1) == self.steps:
             try:

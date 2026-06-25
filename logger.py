@@ -15,6 +15,33 @@ class SimulationLogger:
     def _tag_number(value: float) -> str:
         return f"{float(value):g}".replace(".", "p")
 
+    @staticmethod
+    def _height_output_folder(height_m: float) -> str:
+        height = float(height_m)
+        if 1.5 <= height <= 13.0:
+            return "H0_1p5_13m"
+        if 13.0 < height <= 22.5:
+            return "H1_13_22p5m"
+        if 22.5 < height <= 100.0:
+            return "H2_22p5_100m"
+        if 100.0 < height <= 300.0:
+            return "H3_100_300m"
+        raise ValueError(f"UE height {height:g} m does not match an output folder range")
+
+    @staticmethod
+    def _unique_filepath(filepath: str) -> str:
+        if not os.path.exists(filepath):
+            return filepath
+
+        base, ext = os.path.splitext(filepath)
+        suffix = 1
+        while True:
+            candidate = f"{base}_{suffix:03d}{ext}"
+            if not os.path.exists(candidate):
+                return candidate
+            suffix += 1
+
+
     def setup_log(self):
         self.sim.data_log = {'Step': []}
         for i in range(self.sim.num_ues):
@@ -64,7 +91,9 @@ class SimulationLogger:
                 self.sim.data_log[rsrp_key].append(None)
 
     def save_data_to_csv(self):
-        os.makedirs("data", exist_ok=True)
+        output_root = getattr(self.sim, "output_root", "data")
+        output_dir = os.path.join(output_root, self._height_output_folder(self.sim.ue_height_m))
+        os.makedirs(output_dir, exist_ok=True)
         max_len = max((len(v) for v in self.sim.data_log.values()), default=0)
         for k in self.sim.data_log:
             while len(self.sim.data_log[k]) < max_len:
@@ -81,10 +110,12 @@ class SimulationLogger:
         if self.sim.num_ues == 1:
             height_tag = self._tag_number(self.sim.get_ue_height_m(0))
             speed_tag = self._tag_number(self.sim.ue_speeds[0])
-            filename = f"{timestamp}_1_UE_h{height_tag}m_v{speed_tag}kmh_Data.csv"
+            filename = f"{timestamp}_1_UE_h{height_tag}m_v{speed_tag}kmh.csv"
         else:
-            filename = f"{timestamp}_{self.sim.num_ues}_UE_Data.csv"
-        filepath = os.path.join("data", filename)
+            filename = f"{timestamp}_{self.sim.num_ues}_UE.csv"
+        filepath = self._unique_filepath(os.path.join(output_dir, filename))
         
         df.to_csv(filepath, index=False, sep=',', decimal='.', encoding='utf-8-sig', float_format='%.2f')
+        self.last_saved_csv_path = filepath
         print(f"Saved single CSV for all {self.sim.num_ues} UEs: {filepath}")
+        return filepath

@@ -35,8 +35,6 @@ H3 & \(100<h_{\mathrm{UE}}\le300\) m & High aerial UE range under the UMa-AV mod
 \label{tab:altitude-ranges-a2g}
 \end{table}
 
-The main A2G comparison uses H2 and H3, because these ranges represent aerial UE operation. H0 is kept as the terrestrial baseline, and H1 is kept as a transition range between ordinary ground-level operation and aerial operation. When detailed plots are produced, one representative height may be selected from each range for time-series visualization, while repeated runs within the same range are used for aggregate statistics.
-
 \subsubsection{Scenario Description}
 
 \begin{table}[H]
@@ -57,26 +55,20 @@ S3 & A2G scenario with different handover-delay or transport-delay settings. & A
 \label{tab:experimental-scenario-groups}
 \end{table}
 
-The radio simulation settings are kept fixed across altitude scenarios except for UE height. This makes the altitude effect easier to interpret because the carrier frequency, gNB transmit power, antenna gains, bandwidth, noise figure, handover margin, and mobility model remain unchanged.
+The radio simulation settings are kept fixed across altitude scenarios except for UE height. The fixed radio parameters follow the implementation settings summarized in Table~\ref{tab:principal-radio-parameters}. This makes the altitude effect easier to interpret because the carrier frequency, gNB transmit power, antenna gains, bandwidth, noise figure, handover margin, and mobility model remain unchanged across the compared altitude groups.
 
 \begin{table}[H]
 \centering
-\caption{Main simulation settings for A2G experiments}
+\caption{Experiment controls for A2G simulation scenarios}
 \small
 \begin{tabularx}{\textwidth}{p{4.0cm}p{3.4cm}X}
 \toprule
-Parameter & Value & Role in the experiment\\
+Control item & Value & Role in the experiment\\
 \midrule
-Carrier frequency & 2 GHz & Used in path-loss calculation\\
-gNB transmit power & 46 dBm & Downlink link-budget parameter\\
-gNB antenna gain / UE antenna gain & 2 dB / 0 dB & Used in received-power calculation\\
-gNB antenna height & 25 m & Ground gNB height\\
 UE height & Ranges H0--H3 & Main variable in altitude scenarios\\
-Bandwidth / UE noise figure & 10 MHz / 9 dB & Used in thermal-noise calculation\\
-Handover margin & 3 dB & RSRP-based serving-cell change condition\\
 Mobility model & Manhattan mobility & UE moves along an urban road grid\\
-UE speed & 20--60 km/h & Randomly assigned by the simulator\\
-Simulation duration & 300 steps & One-second output interval\\
+UE speed & Height-dependent random range & Randomly assigned according to the configured UE-height range\\
+Simulation duration & 1500 steps (300 s) & 0.2-second output interval\\
 Number of UEs & 1 for trace plots; multiple UEs for aggregate runs & Controls whether the result is trajectory-level or aggregate-level\\
 Repetitions & 30 runs per scenario & Reduces randomness from mobility, LOS/NLOS sampling, and shadow fading\\
 \bottomrule

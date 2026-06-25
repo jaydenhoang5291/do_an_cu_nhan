@@ -249,7 +249,7 @@ Thus, a larger \(P_{\mathrm{LOS}}\) gives a higher chance that the link is reali
 
 \subsubsection{Path-Loss Model}
 
-Path loss represents the large-scale attenuation between the transmitter and receiver. It increases with distance and depends on the propagation environment, carrier frequency, UE height, and LOS/NLOS state. The simulator follows the same order as the implementation in \texttt{radio\_models.py}: first it prepares effective distances, then it selects the UMa or UMa-AV formula according to UE height and sampled LOS/NLOS state. The low-height UMa formulas are based on 3GPP TR 38.901, and the aerial UMa-AV formulas are based on 3GPP TR 36.777 \cite{3gpp_38901,3gpp_36777}.
+Path loss represents the large-scale attenuation between the transmitter and receiver. It increases with distance and depends on the propagation environment, carrier frequency, UE height, and LOS/NLOS state. The simulator follows a height-driven calculation order: first it prepares effective distances, then it selects the UMa or UMa-AV formula according to UE height and sampled LOS/NLOS state. The low-height UMa formulas are based on 3GPP TR 38.901, and the aerial UMa-AV formulas are based on 3GPP TR 36.777 \cite{3gpp_38901,3gpp_36777}.
 
 Before evaluating path loss, the horizontal distance is lower-bounded by 10 m and the effective 3D distance is recomputed:
 
@@ -361,7 +361,7 @@ where \(\sigma_{\mathrm{SF}}\) is selected from the corresponding LOS/NLOS and U
 \end{cases}
 \end{equation}
 
-The implementation uses the same UMa/UMa-AV wrapper functions for all UE heights. When \(h_{\mathrm{UE}}=1.5\) m, these functions reduce to the low-height UMa case. The only ground-default difference in the shadow-fading implementation is that, when no elevated UE height is enabled, the standard deviation is taken from the fixed values in \texttt{config.py}: \(\sigma_{\mathrm{SF}}=4.6\) dB for LOS and \(10\) dB for NLOS.
+The implementation uses the same UMa/UMa-AV wrapper functions for all UE heights. When \(h_{\mathrm{UE}}=1.5\) m, these functions reduce to the low-height UMa case. Therefore, the simulator does not use a separate ground-mode shadow-fading configuration; the shadow-fading standard deviation is always selected from the UE-height and LOS/NLOS conditions shown above.
 
 The sampled value is clipped to the interval \([-3\sigma_{\mathrm{SF}},3\sigma_{\mathrm{SF}}]\). This clipping avoids unrealistically large random losses in finite simulation traces while preserving the zero-mean Gaussian behaviour for most samples. The received power including shadow fading is then
 
@@ -403,23 +403,28 @@ The radio-measurement dataset generated in this thesis records these propagation
 
 \subsection{Mobility Management}
 
-HO is the mobility procedure that transfers a UE from a source cell or gNB to a target cell or gNB while attempting to maintain service continuity. From a radio perspective, an HO may be motivated by changes in serving-cell and neighbor-cell quality. From a protocol perspective, the procedure requires signaling between the UE, source gNB, target gNB, and core network before the transition can be considered complete.
+Mobility management is the set of network functions that maintains service continuity while a UE changes its position, serving-cell condition, or radio environment. In an NG-RAN system, the UE is associated with a serving gNB, while neighboring gNBs may become suitable targets as the UE moves through the deployment area. The serving-cell choice is therefore related to radio measurements such as RSRP and SINR, but it is also constrained by network procedures, signaling, and resource preparation \cite{3gpp_38300,3gpp_38215}.
 
-In this thesis, HO delay refers to the time interval required for the HO procedure to progress from its trigger or preparation phase to its observed completion or failure outcome in the available experiment logs. This delay is affected not only by radio conditions, but also by signaling latency, packet loss, jitter, retransmission behavior, and timer configuration. Therefore, HO-delay analysis requires protocol-level event logs in addition to radio-measurement traces.
+At the radio-measurement level, mobility management starts from observing the quality of the serving cell and neighboring cells. A UE near a cell boundary may receive comparable signals from several gNBs, and an aerial UE may observe even more visible cells because of stronger LOS conditions. If a neighboring cell becomes more favorable than the current serving cell, the network may need to perform a HO to preserve link quality and avoid service degradation. This radio-level view explains why RSRP, SINR, LOS state, interference, UE position, and speed are important fields in the generated measurement trace.
 
-\subsection{Open-source platforms of 5G core mobile network}
+HO is the mobility procedure that transfers a UE from a source cell or gNB to a target cell or gNB while attempting to maintain service continuity. Conceptually, a handover includes target-cell selection, preparation of resources at the target side, signaling between network entities, UE reconfiguration or access to the target cell, and completion or failure handling \cite{3gpp_38300}. Therefore, a change in the best radio candidate should not be interpreted as a completed handover by itself. It indicates that a mobility action may be needed, whereas the actual handover outcome depends on whether the required protocol procedure is successfully executed.
 
-Open-source 5G core platforms provide practical software implementations of the core network functions used in 5G Standalone (SA) systems. They are useful for research and experimental testbeds because they allow the control-plane and user-plane behavior of a mobile core network to be deployed, configured, and observed without relying on a commercial 5GC product. In this thesis, two representative open-source platforms are considered: free5GC and Open5GS.
+In this thesis, HO delay refers to the time interval required for the HO procedure to progress from its trigger or preparation phase to its observed completion or failure outcome in the available experiment logs. This delay is affected not only by radio conditions, but also by signaling latency, packet loss, jitter, retransmission behavior, and timer configuration. Therefore, HO-delay analysis requires protocol-level event logs in addition to radio-measurement traces. The radio simulator is used to describe serving-cell changes and measurement conditions, while the handover-emulation logs are used to analyze protocol-level completion time, timeout cases, and failure behavior.
 
-free5GC is an open-source 5GC implementation whose goal is to implement the 5GC defined in 3GPP Release 15 and beyond. The project describes itself as a Linux Foundation project for 5G mobile core networks, with support for SBA and cloud-native deployment using Docker or Kubernetes \cite{free5gc_project}. Its modular implementation of network functions such as AMF, SMF, UPF, NRF, UDM, AUSF, PCF, and NSSF makes it suitable for experiments that need a 5G SA core with explicit control-plane signalling.
+\subsection{Open-Source Platforms for 5G Core Networks}
 
-Open5GS is another open-source mobile core platform. It is designed for building NR/LTE mobile networks and provides both 5GC and EPC support, which makes it useful when experiments need to compare or reuse components across 5G and LTE-oriented deployments \cite{open5gs_project}. Compared with free5GC, Open5GS has a broader multi-generation scope, while free5GC focuses more directly on a 5GC implementation aligned with the 5G core architecture.
+Open-source 5G core platforms provide deployable implementations of the control-plane and user-plane functions used in 5G Standalone (SA) systems. They are important for mobility research because radio measurements alone cannot show how a handover is executed after a target cell is selected. A protocol-level testbed needs core-network functions that can handle UE registration, session management, NGAP/N2 signalling, and user-plane connectivity, so that handover procedures can be observed through logs and timers instead of being treated only as abstract events \cite{3gpp_38300}. In this thesis, free5GC and Open5GS are considered as representative open-source platforms.
+
+free5GC is an open-source implementation of the 5GC architecture defined for 3GPP Release 15 and later systems \cite{free5gc_project}. It provides modular network functions such as AMF, SMF, UPF, NRF, UDM, AUSF, PCF, and NSSF, which correspond to the service-based 5GC architecture. This makes free5GC suitable for experiments that require explicit 5G SA control-plane behavior, especially AMF-side signalling over NGAP/N2 and user-plane support through UPF/GTP-U. For this reason, free5GC is the primary 5G core platform used by the handover-emulation part of this thesis.
+
+Open5GS is another open-source mobile core platform that supports both 5GC and EPC deployments \cite{open5gs_project}. Its broader NR/LTE scope makes it useful for constructing private mobile-network testbeds and for comparing implementation choices across 5G and LTE-oriented systems. In the context of this thesis, Open5GS is treated mainly as a reference platform, while free5GC is more directly aligned with the implemented 5G SA handover experiment.
 
 \begin{table}[H]
 \centering
-\caption{Comparison of free5GC and Open5GS}
+\caption{Comparison of open-source 5G core platforms}
 \label{tab:free5gc-open5gs-comparison}
-\begin{tabularx}{\textwidth}{|p{3.2cm}|X|X|}
+\renewcommand{\tabularxcolumn}[1]{>{\raggedright\arraybackslash}p{#1}}
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{3.2cm}|>{\raggedright\arraybackslash}X|>{\raggedright\arraybackslash}X|}
 \hline
 \textbf{Criterion} & \textbf{free5GC} & \textbf{Open5GS} \\
 \hline
@@ -431,12 +436,13 @@ Architecture & Follows the 5GC SBA with modular network functions such as AMF, S
 \hline
 Deployment orientation & Supports cloud-native deployment with Docker and Kubernetes, which is convenient for reproducible research testbeds \cite{free5gc_project}. & Provides documentation and source code for building private NR/LTE mobile-network testbeds \cite{open5gs_project}. \\
 \hline
-Suitability for this thesis & Suitable when the experiment requires a 5G SA core and explicit 5GC signalling behavior. & Suitable as a comparative platform or when LTE/EPC compatibility is also required. \\
+Suitability for this thesis & Used as the main 5G core platform for protocol-level handover emulation. & Considered as a reference platform rather than the main experimental core. \\
 \hline
 \end{tabularx}
+\renewcommand{\tabularxcolumn}[1]{>{\raggedright\arraybackslash}p{#1}}
 \end{table}
 
-In the context of this thesis, free5GC is the more relevant platform because the experimental system focuses on 5G core signalling and handover-related behavior in a 5G-oriented environment. Open5GS is still important as a reference platform because it represents a widely used open-source alternative for constructing NR/LTE mobile core testbeds.
+This comparison clarifies why the implemented test environment uses free5GC for the 5G SA handover study, while Open5GS remains useful as a reference point for alternative open-source core-network testbeds.
 
 \subsection{Chapter Conclusion}
 

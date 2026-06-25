@@ -19,22 +19,32 @@ The Python simulator and StormSim therefore have different responsibilities. The
 
 \subsubsection{Network and Mobility}
 
-The user-defined rectangular region is centered in a 10 km canvas. Ground gNBs are placed on an axial hexagonal grid with geometric radius 500 m and adjacent-site spacing approximately 866 m. Each UE begins at a random road intersection, selects a valid cardinal direction, and receives a uniformly sampled speed of 20--60 km/h. Movement per step is \(d=v\Delta t\), with \(\Delta t=1\) s. After three direction changes, the UE stops for nine steps and accelerates over two steps.
+The radio simulation subsystem is designed to generate structured radio-measurement traces from a controllable geometric scenario. The simulation area entered by the user is represented as a rectangular study region placed at the center of a 10 km by 10 km canvas. This separation between the full canvas and the active study rectangle makes it possible to draw the cellular layout around the region while keeping the UE movement bounded inside the selected area.
 
-A useful part of the simulator is that the number of gNBs is not fixed manually. Instead, it is scaled from the rectangular simulation area entered by the user. The implementation follows the axial-coordinate representation for hexagonal grids, where each hexagon is stored as \((q,r)\) and the third cube coordinate is recovered as
+Ground gNBs are deployed on a flat-top hexagonal grid. The geometric hexagon radius is \(R=500\) m, so the distance between adjacent gNB centers is approximately \(\sqrt{3}R\), or about 866 m. This value is not entered manually for every gNB. Instead, the simulator generates enough candidate hexagonal sites to cover the user-defined rectangle and a surrounding buffer. As a result, the number of gNBs automatically follows the size of the selected study area.
+
+UEs move on a Manhattan-style road grid inside the rectangular region. Each UE is initialized at a random road intersection and is assigned a valid cardinal direction. Within one simulation run, all UEs use the scenario UE height, while each UE receives an independent speed sample from the height-dependent speed range associated with that height. At each one-second simulation step, the basic movement distance is
+
+\begin{equation}
+    d_{\mathrm{move}}=v\Delta t,
+\end{equation}
+
+where \(v\) is the UE speed and \(\Delta t=1\) s. The movement model also includes a stop-and-go behavior: after a configured number of direction changes, the UE pauses for several steps and then gradually returns to its base speed. The detailed mobility behavior is described separately in Section~\ref{sec:ue-mobility-model}; this subsection focuses on how the mobility state is integrated into the radio-simulation workflow.
+
+The gNB placement procedure follows the axial-coordinate representation for hexagonal grids. Each hexagon is stored as \((q,r)\), and the third cube coordinate is recovered as
 
 \begin{equation}
     s=-q-r.
 \end{equation}
 
-This keeps the cube-coordinate constraint \(q+r+s=0\) while storing only two coordinates, which is a standard practical approach for hexagonal-grid algorithms \cite{redblob_hexagons}. The simulator uses the flat-top axial-to-pixel conversion
+This keeps the cube-coordinate constraint \(q+r+s=0\) while storing only two coordinates, which is a standard practical approach for hexagonal-grid algorithms \cite{redblob_hexagons}. The flat-top axial-to-Cartesian conversion used for the gNB layout is
 
 \begin{align}
     x &= R\left(\frac{3}{2}q\right),\\
     y &= R\left(\sqrt{3}r+\frac{\sqrt{3}}{2}q\right),
 \end{align}
 
-where \(R=500\) m is the geometric hexagon radius. These coordinates are then shifted by the canvas center so that the generated grid is centered on the simulation map. With this flat-top layout, neighboring gNB centers are spaced by approximately \(\sqrt{3}R\), which gives about 866 m for \(R=500\) m.
+where \(R\) is the geometric hexagon radius. These coordinates are shifted by the canvas center so that the generated grid is centered on the simulation map.
 
 To adapt the topology to an arbitrary user-defined rectangle, the algorithm first estimates the axial coordinate ranges needed to cover the requested width and height:
 
@@ -49,7 +59,7 @@ To adapt the topology to an arbitrary user-defined rectangle, the algorithm firs
     \right],
 \end{align}
 
-where \(W\) and \(H\) are the user-entered simulation width and height, and \(\mathrm{int}(\cdot)\) denotes the integer conversion used in the implementation. The additional margin of one axial step avoids missing edge cells after the skewed axial grid is converted into Cartesian coordinates. The simulator then enumerates all \((q,r)\) pairs in these ranges, computes \(s=-q-r\), converts the hex center to pixel coordinates, and keeps only the centers that fall inside the simulation rectangle expanded by a boundary buffer:
+where \(W\) and \(H\) are the user-entered simulation width and height, and \(\mathrm{int}(\cdot)\) denotes integer conversion. The additional margin of one axial step avoids missing edge cells after the skewed axial grid is converted into Cartesian coordinates. The simulator then enumerates all \((q,r)\) pairs in these ranges, computes \(s=-q-r\), converts the hex center to Cartesian coordinates, and keeps only the centers that fall inside the simulation rectangle expanded by a boundary buffer:
 
 \begin{equation}
     b=\frac{\sqrt{3}}{2}R.
@@ -63,33 +73,36 @@ Thus a candidate gNB is retained when
     y_{\min}-b \le y \le y_{\max}+b.
 \end{equation}
 
-This design makes the gNB count a consequence of the requested study area instead of a hard-coded parameter. A larger rectangle automatically produces more hexagonal sites, while a smaller rectangle keeps only the sites needed near that region. The buffer also ensures that UEs near the simulation boundary still observe nearby external cells, reducing artificial edge effects in RSRP, SINR, and serving-cell selection.
+This design makes the gNB count a consequence of the requested study area instead of a fixed scenario constant. A larger rectangle automatically produces more hexagonal sites, while a smaller rectangle keeps only the sites needed near that region. The buffer also ensures that UEs near the simulation boundary still observe nearby external cells, reducing artificial edge effects in RSRP, SINR, and serving-cell selection.
 
 \subsubsection{Radio Parameters}
 
 \begin{table}[H]
 \centering
 \caption[Principal radio parameters]{Principal radio parameters \cite{3gpp_38901,3gpp_36777,3gpp_36104,3gpp_36101}}
-\begin{tabular}{lll}
+\begin{tabular}{ll}
 \toprule
-Parameter & Value & Use\\
+Parameter & Value\\
 \midrule
-Carrier frequency & 2 GHz & Path loss\\
-gNB power & 46 dBm & Link budget\\
-Bandwidth / noise figure & 10 MHz / 9 dB & Noise\\
-gNB / ground-UE height & 25 / 1.5 m & 3D distance\\
-Aerial height range & 1.5--300 m & UMa-AV\\
-Handover margin & 3 dB & Cell change\\
-Simulation steps & 0--300 & 301 output rows\\
+Carrier frequency & 2 GHz\\
+gNB power & 46 dBm\\
+gNB / UE antenna gain & 2 / 0 dB\\
+Bandwidth / noise figure & 10 MHz / 9 dB\\
+gNB / default UE height & 25 / 1.5 m\\
+UE height range & 1.5--300 m\\
+Handover margin & 3 dB\\
 \bottomrule
 \end{tabular}
+\label{tab:principal-radio-parameters}
 \end{table}
 
-The table combines standardized propagation assumptions with implementation-level simulation settings from \texttt{config.py}. In particular, the RSRP approximation below uses \(50\) LTE resource blocks for a 10 MHz carrier and \(12\) subcarriers per resource block; it is not an exact physical-layer CRS, SS-RSRP, or CSI-RSRP realization.
+The table combines standardized propagation assumptions with implementation-level simulation settings used in the radio simulator. These values define the link budget, thermal-noise calculation, UE-height range, and RSRP-based serving-cell decision. The RSRP approximation used later assumes \(50\) LTE resource blocks for a 10 MHz carrier and \(12\) subcarriers per resource block; it is therefore a system-level approximation rather than an exact physical-layer CRS, SS-RSRP, or CSI-RSRP realization.
 
 \subsubsection{Propagation-Model Calculation Flow}
 
-The propagation model is executed for each UE--gNB candidate link at every simulation step. Its role is to transform the geometry and UE height into the radio fields that are later used for serving-cell selection, SINR calculation, and dataset generation.
+The propagation model is executed for each UE--gNB candidate link at every simulation step. Its role is to transform the current geometry and UE height into radio fields that are later used for serving-cell selection, interference calculation, SINR calculation, and dataset generation. The model follows the theoretical chain introduced in Chapter 2, but here the focus is on how the chain is organized inside the simulator workflow.
+
+The simulator does not rely on a separate terrestrial-versus-aerial mode switch. Instead, the UE height is the controlling input for the propagation regime. A low-height UE naturally falls into the UMa height range, while elevated UEs are evaluated by the UMa-AV expressions when their height enters the aerial range. This design keeps the radio calculation consistent across all altitude cases: the same processing chain is used, and only the height-dependent model selection changes.
 
 \begin{figure}[H]
 \centering
@@ -109,51 +122,63 @@ The propagation model is executed for each UE--gNB candidate link at every simul
     \draw[arrow] (sf) -- (meas);
     \draw[arrow] (meas) |- (out);
 \end{tikzpicture}
-\caption{Propagation-model calculation flow implemented in the radio simulator}
+\caption{Propagation-model calculation flow in the radio simulator}
 \label{fig:propagation-calculation-flow}
 \end{figure}
 
 \begin{table}[H]
 \centering
-\caption{Implementation mapping of the propagation-model calculations}
+\caption{Mapping of propagation-model calculations to simulator outputs}
 \small
 \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.8cm}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}p{4.0cm}}
 \toprule
 Stage & Operation in the simulator & Output used later\\
 \midrule
-Geometry & Use UE/gNB positions and heights to compute 2D/3D distances and choose the ground or aerial propagation branch. & Link distance and height regime\\
+Geometry & Use UE/gNB positions and heights to compute 2D/3D distances and select the low-height UMa or UMa-AV height regime. & Link distance and height regime\\
 LOS state & Evaluate the LOS probability, then sample or reuse the cached Bernoulli LOS/NLOS state for each UE--gNB link. & \texttt{los\_probability}, \texttt{los\_state}\\
 Path loss & Apply the UMa or UMa-AV formula according to distance, height, carrier frequency, and LOS/NLOS state. & \texttt{pathloss}\\
 Shadow fading & Draw clipped Gaussian shadow fading, keep it in the link cache, and refresh it after 25 m of accumulated UE movement. & \texttt{shadow\_fading}\\
-RSRP and SINR & Apply the link budget, map total received power to RSRP, add first-tier interference and thermal noise, and compute SINR. & \texttt{rsrp}, \texttt{sinr}, neighbor RSRP fields\\
+RSRP and SINR & Apply the link budget, map total received power to RSRP, add first-tier interference and thermal noise, and compute SINR. & RSRP, SINR, and neighbor-cell RSRP fields\\
 \bottomrule
 \end{tabularx}
 \label{tab:propagation-implementation-mapping}
 \end{table}
 
-This flow is applied to the serving link, candidate serving cells, and first-tier interfering cells. The shadow-fading value is stored in the same per-link cache as the LOS/NLOS state and is resampled after 25 m of accumulated UE motion, as described in Chapter 2. Received power and RSRP are
+This flow is applied to candidate serving cells and to the first-tier interfering cells used in the SINR calculation. For each UE--gNB link, the sampled LOS/NLOS state and the current shadow-fading value are stored in a per-link cache. The shadow-fading value is reused while the UE movement accumulated for that link remains below 25 m, and a new value is sampled after the update distance is reached. This keeps the large-scale fading variation spatially smoother than an independently sampled value at every time step.
+
+For a selected gNB, received power and RSRP are computed as
 
 \begin{align}
 P_{\mathrm{rx}} &= P_{\mathrm{tx}}+G_{\mathrm{tx}}+G_{\mathrm{rx}}-PL-SF,\\
 \mathrm{RSRP} &= P_{\mathrm{rx}}-10\log_{10}(50\times12).
 \end{align}
 
-SINR includes thermal noise and interference from six first-tier gNBs.
+The SINR calculation uses the serving-link received power as the desired signal. Interference is calculated from the six nearest non-serving gNBs around the serving gNB, which approximate the first tier of co-channel interferers in the hexagonal layout. Thermal noise is then added to this interference term before converting the result to dB. This design makes SINR more sensitive than RSRP to aerial scenarios, because a higher UE can observe stronger received power from both the serving gNB and neighboring gNBs. The neighbor-cell RSRP fields are therefore not only auxiliary logging fields; they provide the radio context needed to explain why a UE may experience high serving-cell power while its SINR remains limited by interference.
 
 \subsubsection{Handover Decision and Output}
 
-The strongest cell is selected initially. Candidate \(c\) replaces serving cell \(s\) only when
+The radio simulator uses an RSRP-based serving-cell rule. At initialization, the strongest candidate cell is selected as the serving gNB. After that, the current serving cell is kept unless a candidate cell exceeds the current serving-cell RSRP by the configured handover margin. Candidate \(c\) replaces serving cell \(s\) only when
 
 \begin{equation}
 \mathrm{RSRP}_{c}>\mathrm{RSRP}_{s}+3~\mathrm{dB}.
 \end{equation}
 
-There is no time-to-trigger or SINR threshold. The CSV records position, height, direction, LOS, path loss, shadow fading, RSRP, received power, SINR, speed, serving BS, handover flag, and six neighbor measurements.
+There is no time-to-trigger, hysteresis timer, or SINR threshold in this radio-level serving-cell rule. Therefore, a recorded handover flag in the radio dataset should be interpreted as a serving-cell index transition suggested by the measurement model, not as a completed 5G protocol handover. This distinction is important because the radio simulator produces measurement traces and serving-cell events, while the protocol-level handover timing and execution behavior are studied separately in the handover-emulation subsystem. The exported dataset records UE position, height, direction, LOS probability, LOS/NLOS state, path loss, shadow fading, RSRP, received power, SINR, speed, serving gNB index, handover flag, and six neighbor-cell RSRP measurements. These fields are later used to inspect how UE movement and altitude affect the radio conditions around serving-cell changes.
 
 \subsection{UE Mobility Model}
+\label{sec:ue-mobility-model}
 \textcolor{red}{ADD 2 MODEL, RANDOM WALK AND MANHATTAN}
 
-Two mobility models are considered in this section: the Random Walk mobility model and the Manhattan mobility model. The Random Walk model is a basic unconstrained mobility model in which the UE changes its movement direction randomly over time \cite{bai2003}. At each movement update, the UE selects a direction and moves for a given time interval according to its speed. Because the next direction is not restricted by a road structure, the resulting trajectory may freely turn in different directions within the simulation area.
+This section describes the UE mobility model used by the radio simulator. Two mobility concepts are discussed: Random Walk and Manhattan mobility. Random Walk is included as a reference model because it is a common baseline for random movement, while Manhattan mobility is the model actually used in the implemented simulation scenario. This distinction is important because the thesis studies urban-style movement where UE trajectories are constrained by road geometry rather than freely changing direction in an open plane.
+
+The Random Walk model is an unconstrained mobility model in which the UE changes its movement direction randomly over time \cite{bai2003}. At each movement update, the UE selects a direction and travels for a given time interval according to its speed. If the selected direction at step \(k\) is represented by \(\theta_k\), a simple two-dimensional Random Walk update can be written as
+
+\begin{align}
+    x_{k+1} &= x_k + v\Delta t\cos\theta_k,\\
+    y_{k+1} &= y_k + v\Delta t\sin\theta_k.
+\end{align}
+
+Because the next direction is not restricted by a road structure, the resulting trajectory may turn freely within the simulation area. This makes Random Walk simple and useful as a conceptual baseline, but it is less suitable for representing urban vehicle-like movement along streets.
 
 \begin{figure}[H]
 \centering
@@ -185,9 +210,9 @@ Two mobility models are considered in this section: the Random Walk mobility mod
 \label{fig:random-walk-mobility}
 \end{figure}
 
-In this thesis, the Random Walk model is introduced only as a reference mobility model. The implemented UE movement follows the Manhattan mobility model because the simulated scenario focuses on structured movement along an urban street grid.
+In this thesis, the Random Walk model is introduced only as a reference mobility model. It is not used as the main movement model because it does not represent lane-like or street-grid constraints. The implemented UE movement follows the Manhattan mobility model, which is more appropriate for studying radio measurements in a structured urban deployment.
 
-The Manhattan mobility model is a geographic-restriction mobility model designed to represent movement on an urban street grid \cite{bai2003}. The service area is divided into horizontal and vertical road segments that form an orthogonal grid. A UE moves only along these road segments and may travel in one of four directions: North, South, East, or West. Direction changes are permitted at intersections, where the UE may continue forward or select another valid road while remaining inside the service area.
+The Manhattan mobility model is a geographic-restriction mobility model designed to represent movement on an urban street grid \cite{bai2003}. The service area is divided into horizontal and vertical road segments that form an orthogonal grid. A UE moves only along these road segments and may travel in one of four directions: East, North, West, or South. Direction changes are permitted at intersections, where the UE may continue forward or select another valid road while remaining inside the service area.
 
 \begin{figure}[H]
 \centering
@@ -210,15 +235,50 @@ The Manhattan mobility model is a geographic-restriction mobility model designed
 \label{fig:manhattan-mobility}
 \end{figure}
 
-UE movement is considered continuous along each road segment. During one simulation interval, the travel distance is determined by the UE speed and the duration of the time step:
+In the implemented simulator, the road grid is constructed from vertical and horizontal line sets over the rectangular study area. The distance between adjacent road lines is entered as a simulation parameter. Each UE begins at one of the generated road intersections, so its initial position already satisfies the Manhattan-grid constraint. At an intersection, the available movement directions are determined by the remaining road segments inside the rectangle. This prevents the UE from selecting a direction that would immediately leave the study area.
+
+UE movement is continuous along each road segment. During one simulation interval, the nominal travel distance is determined by the base UE speed and the duration of the time step:
 
 \begin{equation}
     d_{\mathrm{move}} = v \Delta t,
 \end{equation}
 
-where \(d_{\mathrm{move}}\) is the distance traveled during one time step, \(v\) is the UE speed, and \(\Delta t\) is the time-step duration. At an intersection, the movement direction may be updated according to the set of available directions. Additional behaviors such as temporary stops or gradual acceleration can also be included to represent traffic conditions, but they are not fundamental requirements of the Manhattan model.
+where \(d_{\mathrm{move}}\) is the nominal distance traveled during one time step, \(v\) is the base UE speed, and \(\Delta t\) is the time-step duration. The base speed is sampled once for each UE from the height-dependent speed interval selected for the scenario height. Therefore, UEs in the same simulation run share the same altitude but may have different sampled speeds. This is useful for multi-UE simulations because the dataset can contain several independent trajectories under the same altitude condition.
 
-The Manhattan model provides a more structured representation of urban mobility than unconstrained random movement. As the UE moves along the street grid, its distance and relative direction to surrounding gNBs change over time. These changes lead to variations in path loss, shadow fading, RSRP, and SINR, and may eventually cause the UE to change its serving gNB. Thus, the combination of the hexagonal network model and Manhattan mobility model provides a geometric foundation for studying radio measurements and HO behavior in a cellular network.
+The effective movement distance can be reduced by the stop-and-go mechanism. Let \(\alpha_k\) denote the speed factor at time step \(k\), where \(0\le\alpha_k\le1\). The distance applied to the UE position update is
+
+\begin{equation}
+    d_{\mathrm{eff}}(k)=\alpha_k v\Delta t.
+\end{equation}
+
+When the UE is moving normally, \(\alpha_k=1\). When the UE is stopped, \(\alpha_k=0\). During the acceleration phase after a stop, \(\alpha_k\) increases gradually until the UE returns to its base speed. In the current simulation setting, after three direction changes the UE pauses for nine steps and then ramps up over two steps. This mechanism is not a full traffic-flow model, but it prevents the mobility trace from becoming an unrealistically constant-speed sequence and creates more varied radio-measurement behavior near intersections.
+
+For a movement direction \(u_k\in\{\mathrm{E},\mathrm{N},\mathrm{W},\mathrm{S}\}\), the position update follows the road axis rather than an arbitrary angle:
+
+\begin{equation}
+    (x_{k+1},y_{k+1}) =
+    \begin{cases}
+    (x_k+d_{\mathrm{eff}}(k),y_k), & u_k=\mathrm{E},\\
+    (x_k,y_k+d_{\mathrm{eff}}(k)), & u_k=\mathrm{N},\\
+    (x_k-d_{\mathrm{eff}}(k),y_k), & u_k=\mathrm{W},\\
+    (x_k,y_k-d_{\mathrm{eff}}(k)), & u_k=\mathrm{S}.
+    \end{cases}
+\end{equation}
+
+When the remaining distance in the current time step is larger than the distance to the next intersection, the UE first reaches that intersection, selects a valid outgoing road, and then continues moving with the remaining distance. This detail is important because it allows one simulation step to cross an intersection without losing distance, while still enforcing the Manhattan-grid constraint.
+
+The Manhattan update procedure can be summarized as follows:
+
+\begin{enumerate}
+    \item initialize each UE at a random road-grid intersection;
+    \item assign an initial valid direction from the available cardinal directions;
+    \item compute the effective travel distance for the current step;
+    \item move the UE along the current road segment until the distance is exhausted or an intersection is reached;
+    \item at an intersection, randomly select one valid direction and update the turn counter if the direction changes;
+    \item trigger a pause and ramp-up cycle after the configured number of direction changes.
+\end{enumerate}
+
+This mobility model is especially relevant to the radio-measurement objective of the thesis. As the UE moves along the street grid, its distance and relative direction to surrounding gNBs change over time. These changes affect LOS probability, path loss, shadow fading, RSRP, interference, and SINR. When a neighboring gNB becomes stronger than the current serving gNB by more than the handover margin, the serving-cell index changes and a handover flag is recorded in the dataset. Thus, the combination of the hexagonal gNB layout and Manhattan mobility provides a consistent geometric foundation for studying radio-measurement variation and HO-related serving-cell behavior.
 
 \subsection{Implementation of Handover Procedure in StormSIM}
 

@@ -54,7 +54,11 @@ class GridMobility:
             self.sim.ue_turn_count[ue_idx] += 1
             self.sim.ue_turns_in_step[ue_idx] += 1
 
-            if self.sim.ue_turn_count[ue_idx] >= self.sim.turns_before_stop:
+            stop_and_go_enabled = (
+                self.sim.turns_before_stop > 0
+                and self.sim.stop_duration_steps > 0
+            )
+            if stop_and_go_enabled and self.sim.ue_turn_count[ue_idx] >= self.sim.turns_before_stop:
                 self.sim.ue_turn_count[ue_idx] = 0
                 self.sim.ue_pause_remaining[ue_idx] = self.sim.stop_duration_steps
                 self.sim.ue_ramp_step[ue_idx] = -2

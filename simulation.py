@@ -73,7 +73,7 @@ class CellularNetworkReceivedPower:
         # UE
         self.num_ues = int(num_ues)
         self.ue_colors = ['green', 'purple', 'orange', 'cyan', 'magenta', 'yellow', 'black']
-        self.ue_speeds = np.random.uniform(60.0, 120.0, self.num_ues)  # km/h
+        self.ue_speeds = np.random.uniform(config.UE_SPEED_MIN_KMH, config.UE_SPEED_MAX_KMH, self.num_ues)  # km/h
         self.ue_speeds_ms = self.ue_speeds * (1000.0 / 3600.0)
         self.ue_heights_m = np.full(self.num_ues, self.ue_height_m, dtype=float)
         self.aerial_ues = [

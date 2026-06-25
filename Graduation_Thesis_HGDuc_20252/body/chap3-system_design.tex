@@ -67,25 +67,7 @@ This design makes the gNB count a consequence of the requested study area instea
 
 \subsubsection{Radio Parameters}
 
-\begin{table}[H]
-\centering
-\caption[Principal radio parameters]{Principal radio parameters \cite{3gpp_38901,3gpp_36777,3gpp_36104,3gpp_36101}}
-\begin{tabular}{lll}
-\toprule
-Parameter & Value & Use\\
-\midrule
-Carrier frequency & 2 GHz & Path loss\\
-gNB power & 46 dBm & Link budget\\
-Bandwidth / noise figure & 10 MHz / 9 dB & Noise\\
-gNB / ground-UE height & 25 / 1.5 m & 3D distance\\
-Aerial height range & 1.5--300 m & UMa-AV\\
-Handover margin & 3 dB & Cell change\\
-Simulation steps & 0--300 & 301 output rows\\
-\bottomrule
-\end{tabular}
-\end{table}
-
-The table combines standardized propagation assumptions with implementation-level simulation settings from \texttt{config.py}. In particular, the RSRP approximation below uses \(50\) LTE resource blocks for a 10 MHz carrier and \(12\) subcarriers per resource block; it is not an exact physical-layer CRS, SS-RSRP, or CSI-RSRP realization.
+The radio simulator uses standardized propagation assumptions and settings from \texttt{config.py}. The concrete values used in the A2G experiments are reported with the experimental configuration in Chapter 4. In particular, the RSRP approximation below uses \(50\) LTE resource blocks for a 10 MHz carrier and \(12\) subcarriers per resource block; it is not an exact physical-layer CRS, SS-RSRP, or CSI-RSRP realization.
 
 \subsubsection{Propagation-Model Calculation Flow}
 

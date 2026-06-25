@@ -17,7 +17,11 @@ BANDWIDTH = 10e6          # Hz
 # N_dBm = -174 + 10*log10(B_Hz) + NF_dB
 UE_NOISE_FIGURE = 9.0    # dB
 
-HOM = 3.0
+HOM = 1.0
+
+# UE speed distribution used by the mobility model.
+UE_SPEED_MIN_KMH = 100.0
+UE_SPEED_MAX_KMH = 120.0
 
 # Runtime acceleration: evaluate handover candidates among nearby BSs only.
 SERVING_BS_CANDIDATES = 12
@@ -39,10 +43,11 @@ SF_SIGMA = {'LOS': 4.6, 'NLOS': 10.0}
 SHADOW_FADING_UPDATE_DISTANCE_M = 25.0
 
 # UE Stop-and-Go config after turns
-TURNS_BEFORE_STOP = 3
-STOP_DURATION_STEPS = 9
-RAMP_DURATION_STEPS = 2
+# Set TURNS_BEFORE_STOP to 0 to disable stop-and-go.
+TURNS_BEFORE_STOP = 0
+STOP_DURATION_STEPS = 0
+RAMP_DURATION_STEPS = 1
 
 # Output sampling
-SIMULATION_STEPS = 30000
-TIME_PER_STEP_S = 0.01  # 10 ms per simulation step
+SIMULATION_STEPS = 15000
+TIME_PER_STEP_S = 0.02  # 20 ms per simulation step

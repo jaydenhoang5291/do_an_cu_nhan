@@ -27,6 +27,15 @@ RUNS = {
 }
 
 
+def have_inputs(paths: list[Path]) -> bool:
+    missing = [path for path in paths if not path.exists()]
+    if missing:
+        names = ", ".join(path.name for path in missing)
+        print(f"Skipping figure because input files are missing: {names}")
+        return False
+    return True
+
+
 def read_csv(path: Path) -> list[dict[str, str]]:
     with path.open("r", encoding="utf-8-sig", newline="") as handle:
         return list(csv.DictReader(handle))
@@ -40,6 +49,13 @@ def save_figure(filename: str) -> None:
 
 
 def plot_success_rate() -> None:
+    paths = [
+        DATA_DIR / f"handover-trial-summary-{run_id}.csv"
+        for run_id in RUNS.values()
+    ]
+    if not have_inputs(paths):
+        return
+
     labels: list[str] = []
     success_rates: list[float] = []
     trial_counts: list[int] = []
@@ -71,6 +87,13 @@ def plot_success_rate() -> None:
 
 
 def plot_success_delay() -> None:
+    paths = [
+        DATA_DIR / f"handover-trial-summary-{run_id}.csv"
+        for run_id in RUNS.values()
+    ]
+    if not have_inputs(paths):
+        return
+
     labels: list[str] = []
     values: list[list[float]] = []
 
@@ -101,6 +124,13 @@ def plot_success_delay() -> None:
 
 
 def plot_xn_preparation_outcomes() -> None:
+    paths = [
+        DATA_DIR / f"timer-events-{run_id}.csv"
+        for run_id in RUNS.values()
+    ]
+    if not have_inputs(paths):
+        return
+
     labels: list[str] = []
     stop_counts: list[int] = []
     transport_fail_counts: list[int] = []
@@ -150,10 +180,68 @@ def plot_xn_preparation_outcomes() -> None:
     save_figure("archived_xn_prep_outcomes.png")
 
 
+def plot_radio_rsrp_sinr_mean_comparison() -> None:
+    labels = ["H0", "H1", "H2", "H3"]
+    rsrp_means = [-85.46, -78.95, -68.34, -69.92]
+    rsrp_stds = [10.92, 9.71, 5.03, 3.32]
+    sinr_means = [14.59, 11.66, 2.64, 0.31]
+    sinr_stds = [11.76, 9.78, 5.47, 3.56]
+    positions = list(range(len(labels)))
+
+    fig, (ax_rsrp, ax_sinr) = plt.subplots(
+        2,
+        1,
+        figsize=(7.2, 5.2),
+        sharex=True,
+        gridspec_kw={"height_ratios": [1, 1]},
+    )
+
+    ax_rsrp.errorbar(
+        positions,
+        rsrp_means,
+        yerr=rsrp_stds,
+        fmt="o-",
+        color="#4C78A8",
+        ecolor="#2F4B6E",
+        capsize=5,
+        linewidth=2.0,
+        markersize=6,
+        label="RSRP",
+    )
+    ax_rsrp.set_ylabel("RSRP (dBm)")
+    ax_rsrp.set_ylim(-100, -60)
+    ax_rsrp.grid(axis="y", linestyle=":", alpha=0.45)
+    ax_rsrp.legend(loc="lower right")
+
+    ax_sinr.errorbar(
+        positions,
+        sinr_means,
+        yerr=sinr_stds,
+        fmt="s-",
+        color="#F28E2B",
+        ecolor="#7A4A12",
+        capsize=5,
+        linewidth=2.0,
+        markersize=6,
+        label="SINR",
+    )
+    ax_sinr.axhline(0, color="#777777", linewidth=0.8, linestyle="--", alpha=0.7)
+    ax_sinr.set_ylabel("SINR (dB)")
+    ax_sinr.set_ylim(-6, 30)
+    ax_sinr.set_xticks(positions)
+    ax_sinr.set_xticklabels(labels)
+    ax_sinr.grid(axis="y", linestyle=":", alpha=0.45)
+    ax_sinr.legend(loc="upper right")
+
+    fig.supxlabel("Altitude range")
+    save_figure("radio_rsrp_sinr_mean_comparison.png")
+
+
 def main() -> None:
     plot_success_rate()
     plot_success_delay()
     plot_xn_preparation_outcomes()
+    plot_radio_rsrp_sinr_mean_comparison()
     print(f"Generated thesis figures in {IMAGE_DIR}")
 
 

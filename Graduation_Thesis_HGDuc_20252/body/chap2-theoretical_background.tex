@@ -1,4 +1,4 @@
-﻿\subsection{Overview of Cellular Mobile Network and 5G/6G Network Architecture}
+﻿\subsection{Overview of Cellular Mobile Networks and Air-to-Ground Communication}
 
 Cellular mobile networks form the basic architecture of modern mobile communication systems. In this architecture, a wide geographical service area is divided into smaller radio coverage regions called cells. Each cell is served by one or more base stations (BSs), and the UE accesses the mobile network through the wireless link provided by the serving BS \cite{itu_m2083}. This cell-based structure allows the network to provide wide-area coverage while reusing limited radio spectrum across different locations.
 
@@ -8,9 +8,27 @@ A key characteristic of cellular systems is mobility support. Since a UE may mov
 
 Based on this cellular principle, mobile networks have evolved from early voice-oriented systems to broadband and intelligent communication systems. In 5G, the cellular architecture is extended by the New Radio (NR) air interface, gNB-based radio access, dense deployment, massive multiple-input multiple-output (MIMO), beamforming, network slicing, and 5G Core (5GC) connectivity \cite{3gpp_38300}. Looking beyond 5G, 6G is expected to further enhance cellular networks by integrating artificial intelligence, sensing, ultra-dense connectivity, and new spectrum technologies to support more advanced communication scenarios. This 6G perspective is mentioned only as background motivation, because the experimental work in this thesis remains focused on 5G-oriented radio measurements and handover behavior.
 
-The network layout determines the relative positions of serving and neighboring gNBs. It directly influences propagation distance, received signal strength, interference, and mobility-related events. This thesis uses a hexagonal cellular layout as the theoretical basis for representing the network geometry.
+The 5G mobile network is designed to support three main service objectives: Enhanced Mobile Broadband (eMBB) for high data rate services, Ultra-Reliable Low Latency Communications (URLLC) for delay-sensitive and reliable services, and Massive Machine-Type Communications (mMTC) for connecting a large number of devices \cite{itu_m2083}. In a basic 5G system, the UE is the terminal device that accesses the mobile network. A UE can be a smartphone, an Internet of Things (IoT) device, or in an aerial communication scenario, an unmanned aerial vehicle (UAV) acting as an aerial UE.
 
-%\subsubsection{Hexagonal Cellular Network Model}
+The UE connects to the RAN through a BS, referred to in 5G as a gNB. The gNB is responsible for providing the wireless radio interface, transmitting and receiving radio signals, managing radio resources, and maintaining the radio connection with the UE. It also forwards user data and control information between the UE and the 5GC network. Therefore, the gNB is the main network element that directly determines how the UE accesses the 5G system over the air interface.
+
+In a conventional terrestrial scenario, the UE is usually located near the ground and moves inside the coverage area of surrounding gNBs. The radio link quality is mainly affected by the horizontal distance between the UE and the serving gNB, obstacles such as buildings or terrain, shadow fading, and interference from neighboring cells.
+
+Air-to-ground (A2G) communication extends this model by considering a UAV or aerial UE communicating with ground-based gNBs. This corresponds to the cellular-connected UAV case, where the UAV acts as a flying mobile terminal within a cellular network \cite{mozaffari2019tutorial,zeng2019accessing}. Unlike a ground UE, an aerial UE operates at a certain altitude and can have LOS or near-LOS paths to several BSs. This difference changes the radio propagation condition because the signal quality is affected not only by horizontal distance, but also by UE altitude, three-dimensional link distance, LOS condition, and interference from neighboring gNBs \cite{zeng2019accessing}.
+
+As the UAV moves, these link conditions can change continuously. A higher altitude may improve visibility to the serving gNB, but it may also expose the UAV to stronger interference from multiple neighboring gNBs; this LOS-dominant channel and aerial-terrestrial interference are highlighted as key issues for UAV communications in 5G and beyond \cite{zeng2019accessing}. For this reason, received signal levels and link conditions may vary rapidly in A2G scenarios. These variations make A2G communication an important case for studying radio measurement behavior and mobility-related problems in 5G networks.
+
+Figure~\ref{fig:a2g-radio-scenario} illustrates the A2G geometry considered in this thesis. It connects the main physical quantities used later in the radio-measurement model: UE height, horizontal distance, three-dimensional link distance, the serving link, and interference from neighboring gNBs.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{Images/uav_bs.png}
+\caption{A2G geometry used to interpret UE height, serving-link distance, and neighboring-cell interference}
+\label{fig:a2g-radio-scenario}
+\end{figure}
+
+
+The network layout determines the relative positions of serving and neighboring gNBs. It directly influences propagation distance, received signal strength, interference, and mobility-related events. This thesis uses a hexagonal cellular layout as the theoretical basis for representing the network geometry.
 
 The hexagonal cellular model is a conceptual approximation used to represent the radio coverage of a BS. In an ideal isotropic environment, equal received-power contours around a BS would be approximately circular. Actual cell boundaries, however, are irregular because they are shaped by terrain, buildings, antenna patterns, propagation loss, and interference. Therefore, a hexagonal cell should not be interpreted as the exact physical coverage boundary of a gNB, but as a simplified geometric abstraction for network planning and analysis \cite{rappaport2002}.
 
@@ -73,32 +91,6 @@ The distance between the centers of two adjacent cells is commonly referred to a
 
 The cell radius and ISD determine the spatial density of gNB deployment. A smaller ISD produces a denser network, which may improve coverage but also increases the possibility of inter-cell interference. Conversely, a larger ISD reduces the number of gNBs in a given area but may result in weaker received power near cell boundaries. Therefore, the hexagonal model is useful for studying coverage, neighboring-cell interference, cell association, and HO behavior.
 
-The 5G mobile network is designed to support three main service objectives: Enhanced Mobile Broadband (eMBB) for high data rate services, Ultra-Reliable Low Latency Communications (URLLC) for delay-sensitive and reliable services, and Massive Machine-Type Communications (mMTC) for connecting a large number of devices \cite{itu_m2083}. In a basic 5G system, the UE is the terminal device that accesses the mobile network. A UE can be a smartphone, an Internet of Things (IoT) device, or in an aerial communication scenario, an unmanned aerial vehicle (UAV) acting as an aerial UE.
-
-The UE connects to the RAN through a BS, referred to in 5G as a gNB. The gNB is responsible for providing the wireless radio interface, transmitting and receiving radio signals, managing radio resources, and maintaining the radio connection with the UE. It also forwards user data and control information between the UE and the 5GC network. Therefore, the gNB is the main network element that directly determines how the UE accesses the 5G system over the air interface.
-
-In a conventional terrestrial scenario, the UE is usually located near the ground and moves inside the coverage area of surrounding gNBs. The radio link quality is mainly affected by the horizontal distance between the UE and the serving gNB, obstacles such as buildings or terrain, shadow fading, and interference from neighboring cells.
-
-Air-to-ground (A2G) communication extends this model by considering a UAV or aerial UE communicating with ground-based gNBs. This corresponds to the cellular-connected UAV case, where the UAV acts as a flying mobile terminal within a cellular network \cite{mozaffari2019tutorial,zeng2019accessing}. Unlike a ground UE, an aerial UE operates at a certain altitude and can have LOS or near-LOS paths to several BSs. This difference changes the radio propagation condition because the signal quality is affected not only by horizontal distance, but also by UE altitude, three-dimensional link distance, LOS condition, and interference from neighboring gNBs \cite{zeng2019accessing}.
-
-As the UAV moves, these link conditions can change continuously. A higher altitude may improve visibility to the serving gNB, but it may also expose the UAV to stronger interference from multiple neighboring gNBs; this LOS-dominant channel and aerial-terrestrial interference are highlighted as key issues for UAV communications in 5G and beyond \cite{zeng2019accessing}. For this reason, received signal levels and link conditions may vary rapidly in A2G scenarios. These variations make A2G communication an important case for studying radio measurement behavior and mobility-related problems in 5G networks.
-
-Figure~\ref{fig:a2g-radio-scenario} illustrates the A2G geometry considered in this thesis. It connects the main physical quantities used later in the radio-measurement model: UE height, horizontal distance, three-dimensional link distance, the serving link, and interference from neighboring gNBs.
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.95\textwidth]{Images/uav_bs.png}
-\caption{A2G geometry used to interpret UE height, serving-link distance, and neighboring-cell interference}
-\label{fig:a2g-radio-scenario}
-\end{figure}
-
-%\subsection{Cellular Network and Mobility Models}
-
-%The spatial arrangement of gNBs and the movement pattern of UEs are important factors in cellular network analysis. 
-
-
-
-
 
 \subsection{Radio Propagation in 5G Networks and Measurement Metrics}
 
@@ -125,7 +117,7 @@ The radio simulator uses a large-scale propagation abstraction rather than a ful
 \rightarrow \{P_{\mathrm{rx}},\mathrm{RSRP},\mathrm{SINR}\}.
 \end{equation}
 
-In this chain, geometry determines path length and LOS probability. The sampled LOS/NLOS state selects the path-loss formula. Shadow fading adds a spatially varying large-scale random term. Finally, the link budget and interference model convert these losses into received power, RSRP, and SINR.
+In this chain, geometry determines path length and LOS probability. The sampled LOS/NLOS state selects the path-loss formula. Shadow fading adds a spatially varying large-scale random term. Finally, the link budget and interference model convert these losses into received power, RSRP, and SINR. Table~\ref{tab:theoretical-propagation-components} links each theoretical component to the corresponding dataset output used in the thesis.
 
 \begin{table}[H]
 \centering
@@ -135,7 +127,7 @@ In this chain, geometry determines path length and LOS probability. The sampled 
 \renewcommand{\tabularxcolumn}[1]{>{\raggedright\arraybackslash}p{#1}}
 \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.8cm}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}p{4.5cm}}
 \toprule
-Component & Theoretical role & Logged or derived quantity\\
+Component & Theoretical role & Dataset output\\
 \midrule
 Link geometry & Defines UE and gNB positions, UE height, movement state, and the internally computed 2D/3D link distance. & UE position, UE height, direction, speed, connected BS; internal 2D/3D distance\\
 \addlinespace[2pt]
@@ -245,7 +237,7 @@ S=
 \end{cases}
 \end{equation}
 
-Thus, a larger \(P_{\mathrm{LOS}}\) gives a higher chance that the link is realized as LOS, while \(P_{\mathrm{LOS}}=1\) always gives a LOS link and \(P_{\mathrm{LOS}}=0\) always gives a NLOS link. The sampled LOS/NLOS state is then cached once for each UE--gNB link and reused in the subsequent path-loss and shadow-fading calculations. This prevents the same link from randomly switching between LOS and NLOS at every time step and makes the generated trace easier to interpret.
+Thus, a larger \(P_{\mathrm{LOS}}\) gives a higher chance that the link is realized as LOS, while \(P_{\mathrm{LOS}}=1\) always gives a LOS link and \(P_{\mathrm{LOS}}=0\) always gives a NLOS link. The implemented simulator keeps the sampled LOS/NLOS state for each UE--gNB link and reuses it in the subsequent path-loss and shadow-fading calculations \cite{3gpp_36777}. This avoids artificial step-to-step switching that would occur if the LOS/NLOS state were redrawn independently at every simulation step. This is a modelling simplification for generating a stable trace, not a statement that the physical LOS/NLOS condition in a real environment can never change.
 
 \subsubsection{Path-Loss Model}
 
@@ -339,7 +331,7 @@ PL_{\mathrm{NLOS,AV}}, & \text{for an aerial NLOS link with } 22.5<h_{\mathrm{UE
 \end{cases}
 \end{equation}
 
-Thus, the logged path-loss value is not only a function of distance. It also reflects UE height, LOS probability, sampled LOS/NLOS state, carrier frequency, and the UMa or UMa-AV scenario selected for the link.
+Thus, the logged path-loss value is not only a function of distance. It also reflects UE height, carrier frequency, the sampled LOS/NLOS state, and the UMa or UMa-AV scenario selected for the link.
 
 \subsubsection{Shadow-Fading Model}
 
@@ -371,7 +363,9 @@ The sampled value is clipped to the interval \([-3\sigma_{\mathrm{SF}},3\sigma_{
 
 where \(P_{\mathrm{tx}}\) is the transmit power, \(G_{\mathrm{tx}}\) and \(G_{\mathrm{rx}}\) are antenna gains, \(PL\) is path loss, and \(X_{\sigma}\) is the shadow-fading term. A positive shadow-fading realization reduces the received power, while a negative realization improves it relative to the median path-loss value. This explains why two UE positions with similar distance to the serving gNB may still produce different received powers.
 
-The simulator does not resample shadow fading independently at every time step. Instead, the current shadow-fading value is cached for each UE--gNB link and reused while the accumulated UE movement for that link remains below 25 m. Once the accumulated movement reaches 25 m, a new \(X_{\sigma}\) value is sampled and the accumulated distance is reset. This 25 m update distance implements a simple spatial-consistency approximation for large-scale fading, following the distance-dependent shadowing treatment used in 3GPP channel modelling \cite{3gpp_36777}. As a result, shadow fading changes more slowly than instantaneous RSRP or SINR calculations and avoids artificial step-to-step randomness in the generated measurement trace.
+The simulator does not resample shadow fading independently at every time step. Instead, the current shadow-fading value is cached for each UE--gNB link and reused while the accumulated UE movement for that link remains below 25 m. Once the accumulated movement reaches 25 m, a new \(X_{\sigma}\) value is sampled and the accumulated distance is reset. This 25 m update distance follows the distance-dependent shadowing treatment used in 3GPP channel modelling \cite{3gpp_36777}. As a result, shadow fading changes more slowly than instantaneous RSRP or SINR calculations and avoids artificial step-to-step randomness in the generated measurement trace.
+
+\subsubsection{RSRP, Interference, Noise, and SINR}
 
 RSRP is a key measurement for assessing cell strength. In NR, 3GPP TS 38.215 defines SS-RSRP and CSI-RSRP as linear averages of the power contributions of resource elements carrying the corresponding synchronization-signal or CSI reference signals \cite{3gpp_38215}. In this thesis, RSRP is used as a system-level approximation of reference-signal power derived from the received downlink power. It provides a compact indicator of serving-cell and neighboring-cell strength and is therefore useful for comparing candidate gNBs along a UE trajectory.
 
@@ -401,7 +395,7 @@ and in dB as
 
 The radio-measurement dataset generated in this thesis records these propagation and measurement concepts in structured form. UE position, height, velocity, and direction describe the mobility state. Serving-cell information identifies the current associated gNB. LOS probability and LOS state describe the propagation condition. Path loss, shadow fading, received power, RSRP, neighboring-cell RSRP, and SINR describe the radio environment observed by the UE at each simulation step. Together, these fields make it possible to inspect how movement changes radio conditions and how those changes may affect cell association and HO-related behavior.
 
-\subsection{Mobility Management}
+\subsection{Mobility Management and Handover Delay}
 
 Mobility management is the set of network functions that maintains service continuity while a UE changes its position, serving-cell condition, or radio environment. In an NG-RAN system, the UE is associated with a serving gNB, while neighboring gNBs may become suitable targets as the UE moves through the deployment area. The serving-cell choice is therefore related to radio measurements such as RSRP and SINR, but it is also constrained by network procedures, signaling, and resource preparation \cite{3gpp_38300,3gpp_38215}.
 

@@ -1,35 +1,97 @@
 \subsection{System Architecture}
+The proposed evaluation platform is organized as a measurement-driven handover
+analysis chain with two complementary subsystems. The radio simulation
+subsystem produces radio-measurement traces from a controlled mobility and
+propagation scenario. The handover-emulation subsystem then replays those
+measurements in StormSIM to execute and observe protocol-level handover behavior
+through a 5G Core environment.
 
-The platform has two independently executable subsystems:
+The radio simulation subsystem is responsible for the measurement side of the
+study. It defines the simulation area, places gNBs according to the selected
+cell layout, updates UE positions according to the mobility model described
+later in this chapter, evaluates the propagation model, and records the radio
+state at each simulation step. The recorded state includes UE position and
+height, serving-cell information, LOS/NLOS condition, path loss, shadow fading,
+received power, RSRP, SINR, and neighbor-cell measurement context. This
+subsystem therefore answers the radio-level question: under the configured
+scenario, when do the measurements suggest that another gNB should become the
+serving cell?
 
-\begin{equation}
-\text{Radio scenario}\rightarrow\text{measurement CSV}\rightarrow
-\text{StormSim handover}\rightarrow\text{timer and delay results}.
-\end{equation}
+The handover-emulation subsystem is responsible for the protocol side of the
+study. StormSIM emulates the UE and gNB behavior needed for the selected
+handover scenarios and interacts with the 5G Core through the corresponding
+control-plane and user-plane interfaces. Before handover evaluation, the UE is
+registered and a data session is established. After that, the measurement trace
+is replayed as the input that determines handover opportunities. For each
+handover trial, the emulator applies the configured transport conditions,
+executes the selected handover procedure, observes timer behavior, and records
+the resulting success or failure and delay.
 
-The first subsystem is the Python radio simulator. It generates mobility and radio measurements, including UE position, serving-cell selection, neighbor-cell RSRP, path loss, shadow fading, received power, and SINR. This subsystem is responsible for the radio-level view of the problem: it explains when the radio condition suggests that another gNB should become the serving cell.
+\begin{figure}[!htbp]
+\centering
+\begin{tikzpicture}[node distance=0.9cm and 0.55cm, font=\small]
+    \node[box, text width=2.6cm] (scenario) {Scenario input\\area, UE height,\\UE count};
+    \node[box, text width=2.75cm, right=of scenario] (radio) {Radio\\simulator};
+    \node[box, text width=2.75cm, right=of radio] (trace) {Radio trace\\RSRP, SINR,\\serving gNB};
+    \node[box, text width=2.85cm, below=of trace] (adapter) {Measurement trace\\normalization};
+    \node[box, text width=2.9cm, left=of adapter] (storm) {StormSIM\\measurement mode};
+    \node[box, text width=2.65cm, left=of storm] (core) {5G Core\\control plane,\\user plane};
+    \node[box, text width=2.75cm, below=of storm] (logs) {Timer, phase,\\and trial logs};
+    \node[box, text width=2.75cm, right=of logs] (analysis) {Success-rate\\and delay\\analysis};
 
-The second subsystem is the protocol-level handover test environment. It uses a free5GC-based 5G Core and a Go-based UE--gNB emulator named StormSim in the implementation. free5GC provides the core-network side of the experiment, including AMF connectivity for NGAP/N2 signaling and user-plane support through GTP-U/N3 \cite{free5gc_project}. StormSim emulates the UE and gNB behavior required by the selected handover scenarios. It connects to the 5G Core, creates UE/gNB contexts, triggers Xn or N2 handover procedures, applies configurable transport impairment such as latency, packet loss, and jitter, and records trial-summary and timer-event logs.
+    \draw[arrow] (scenario) -- (radio);
+    \draw[arrow] (radio) -- (trace);
+    \draw[arrow] (trace) -- (adapter);
+    \draw[arrow] (adapter) -- (storm);
+    \draw[arrow] (core) -- (storm);
+    \draw[arrow] (storm) -- (logs);
+    \draw[arrow] (logs) -- (analysis);
+\end{tikzpicture}
+\caption{Overall architecture of the measurement-driven handover evaluation platform}
+\label{fig:system-architecture}
+\end{figure}
 
-The Python simulator and StormSim therefore have different responsibilities. The Python simulator does not execute the full handover signaling procedure, while StormSim does not replace the radio-propagation simulator. Instead, StormSim is used to study protocol-level execution after a target-cell transition is selected or replayed. Their current CSV schemas are not identical: the first exports \texttt{ue0\_connected\_bs}, while measurement mode expects \texttt{connected\_gnb} and \texttt{gnbX\_rsrp}.
+The interface between the two subsystems is an intermediate measurement trace.
+It allows the radio simulator and the protocol emulator to remain independently
+executable while still forming one evaluation workflow. Once the trace is fixed,
+the same radio-generated serving-cell sequence can be replayed under different
+handover and transport-impairment settings. The normalization step at this
+boundary maps cell identifiers and measurement fields into the representation
+required by StormSIM; it is therefore an interface adaptation stage rather than
+part of the propagation model or the signaling procedure.
 
-\textbf{TODO: cần xác nhận từ người dùng.} Confirm the official schema-conversion step and input CSV.
+\begin{table}[!htbp]
+\centering
+\caption{Functional boundary between the radio simulator and StormSIM}
+\small
+{\renewcommand{\arraystretch}{1.35}
+\renewcommand{\tabularxcolumn}[1]{p{#1}}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{3.0cm}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X}
+\toprule
+Component & Main responsibility & Output used in this thesis\\
+\midrule
+Radio simulation subsystem & Generate mobility and radio measurements from the selected topology, UE movement, LOS/NLOS state, path loss, shadow fading, RSRP, received power, and SINR. & Measurement trace with serving-cell state, handover indication, serving-cell quality, and neighbor-cell context.\\
+Measurement-trace interface & Adapt the radio-measurement output into the input representation required by the handover emulator. & A normalized measurement sequence used to trigger or replay handover opportunities.\\
+StormSIM and 5G Core & Register UE, establish a data session, execute handover procedures, apply transport impairment, monitor timers and handover phases, and record trial outcomes. & Timer events, phase timestamps, trial outcomes, success rate, and delay statistics.\\
+\bottomrule
+\end{tabularx}}
+\label{tab:system-functional-boundary}
+\end{table}
+
+With this architecture, Chapter 4 can report radio-measurement behavior and
+protocol-level outcomes as linked but separate results: the trace provides the
+serving-cell sequence, while StormSIM provides timer events, trial outcomes, and
+handover-delay statistics.
 
 \subsection{Radio Simulation Design}
 
-\subsubsection{Network and Mobility}
+\subsubsection{Network Layout}
 
 The radio simulation subsystem is designed to generate structured radio-measurement traces from a controllable geometric scenario. The simulation area entered by the user is represented as a rectangular study region placed at the center of a 10 km by 10 km canvas. This separation between the full canvas and the active study rectangle makes it possible to draw the cellular layout around the region while keeping the UE movement bounded inside the selected area.
 
 Ground gNBs are deployed on a flat-top hexagonal grid. The geometric hexagon radius is \(R=500\) m, so the distance between adjacent gNB centers is approximately \(\sqrt{3}R\), or about 866 m. This value is not entered manually for every gNB. Instead, the simulator generates enough candidate hexagonal sites to cover the user-defined rectangle and a surrounding buffer. As a result, the number of gNBs automatically follows the size of the selected study area.
 
-UEs move on a Manhattan-style road grid inside the rectangular region. Each UE is initialized at a random road intersection and is assigned a valid cardinal direction. Within one simulation run, all UEs use the scenario UE height, while each UE receives an independent speed sample from the height-dependent speed range associated with that height. At each one-second simulation step, the basic movement distance is
-
-\begin{equation}
-    d_{\mathrm{move}}=v\Delta t,
-\end{equation}
-
-where \(v\) is the UE speed and \(\Delta t=1\) s. The movement model also includes a stop-and-go behavior: after a configured number of direction changes, the UE pauses for several steps and then gradually returns to its base speed. The detailed mobility behavior is described separately in Section~\ref{sec:ue-mobility-model}; this subsection focuses on how the mobility state is integrated into the radio-simulation workflow.
+The network layout is later combined with the UE position, height, direction, and speed supplied by the mobility model in Section~\ref{sec:ue-mobility-model} to compute the UE--gNB geometry and radio measurements.
 
 The gNB placement procedure follows the axial-coordinate representation for hexagonal grids. Each hexagon is stored as \((q,r)\), and the third cube coordinate is recovered as
 
@@ -77,6 +139,13 @@ This design makes the gNB count a consequence of the requested study area instea
 
 \subsubsection{Radio Parameters}
 
+The radio parameters define the fixed link-budget and measurement settings used
+by the radio simulator. These values are separated from scenario variables such
+as UE height and mobility state. In the implemented workflow, UE height is an
+input selected within the research range, while the remaining radio parameters
+provide a common baseline for received-power, RSRP, SINR, and serving-cell
+selection calculations.
+
 \begin{table}[H]
 \centering
 \caption[Principal radio parameters]{Principal radio parameters \cite{3gpp_38901,3gpp_36777,3gpp_36104,3gpp_36101}}
@@ -85,18 +154,36 @@ This design makes the gNB count a consequence of the requested study area instea
 Parameter & Value\\
 \midrule
 Carrier frequency & 2 GHz\\
-gNB power & 46 dBm\\
+gNB transmit power & 46 dBm\\
 gNB / UE antenna gain & 2 / 0 dB\\
-Bandwidth / noise figure & 10 MHz / 9 dB\\
-gNB / default UE height & 25 / 1.5 m\\
-UE height range & 1.5--300 m\\
-Handover margin & 3 dB\\
+System bandwidth & 10 MHz\\
+UE receiver noise figure & 9 dB\\
+gNB antenna height & 25 m\\
+UE height input range & 1.5--300 m\\
+RSRP handover margin & 3 dB\\
 \bottomrule
 \end{tabular}
 \label{tab:principal-radio-parameters}
 \end{table}
 
-The table combines standardized propagation assumptions with implementation-level simulation settings used in the radio simulator. These values define the link budget, thermal-noise calculation, UE-height range, and RSRP-based serving-cell decision. The RSRP approximation used later assumes \(50\) LTE resource blocks for a 10 MHz carrier and \(12\) subcarriers per resource block; it is therefore a system-level approximation rather than an exact physical-layer CRS, SS-RSRP, or CSI-RSRP realization.
+The carrier frequency, gNB transmit power, and antenna gains are used in the
+link-budget calculation after path loss and shadow fading are evaluated. The
+system bandwidth and receiver noise figure determine the thermal-noise level
+used in the SINR calculation. The fixed gNB antenna height and the selected UE
+height define the three-dimensional UE--gNB geometry and the propagation height
+regime. The UE height is therefore not treated as a single default scenario
+constant; it is varied within the configured 1.5--300 m range for terrestrial,
+transition, and aerial cases.
+
+The RSRP value used in this thesis is a system-level approximation derived from
+the received downlink power. For a 10 MHz carrier, the implementation assumes
+50 resource blocks based on the E-UTRA transmission-bandwidth configuration
+and 12 subcarriers per resource block when mapping received power to RSRP
+\cite{3gpp_36104,3gpp_36211}. This abstraction is sufficient for generating
+interpretable measurement traces, but it is not intended to reproduce a full
+physical-layer CRS-RSRP, SS-RSRP, or CSI-RSRP measurement implementation
+\cite{3gpp_36214,3gpp_38215}. The 3 dB margin is then
+used by the RSRP-based serving-cell rule described later in this chapter.
 
 \subsubsection{Propagation-Model Calculation Flow}
 
@@ -104,16 +191,16 @@ The propagation model is executed for each UE--gNB candidate link at every simul
 
 The simulator does not rely on a separate terrestrial-versus-aerial mode switch. Instead, the UE height is the controlling input for the propagation regime. A low-height UE naturally falls into the UMa height range, while elevated UEs are evaluated by the UMa-AV expressions when their height enters the aerial range. This design keeps the radio calculation consistent across all altitude cases: the same processing chain is used, and only the height-dependent model selection changes.
 
-\begin{figure}[H]
+\begin{figure}[!htbp]
 \centering
 \begin{tikzpicture}[node distance=0.9cm and 0.55cm, font=\small]
     \node[box, text width=2.45cm] (geom) {UE/gNB\\position and height};
     \node[box, text width=2.45cm, right=of geom] (dist) {2D/3D distance\\height regime};
-    \node[box, text width=2.45cm, right=of dist] (los) {LOS probability\\cached LOS/NLOS};
+    \node[box, text width=2.45cm, right=of dist] (los) {LOS probability\\and LOS/NLOS state};
     \node[box, text width=2.45cm, below=of los] (pl) {UMa/UMa-AV\\path loss};
-    \node[box, text width=2.45cm, left=of pl] (sf) {Shadow fading\\cache/update};
+    \node[box, text width=2.45cm, left=of pl] (sf) {Shadow fading\\state};
     \node[box, text width=2.45cm, left=of sf] (meas) {Received power,\\RSRP and SINR};
-    \node[box, text width=2.45cm, below=of sf] (out) {Serving cell\\and CSV fields};
+    \node[box, text width=2.45cm, below=of sf] (out) {Serving cell\\and output fields};
 
     \draw[arrow] (geom) -- (dist);
     \draw[arrow] (dist) -- (los);
@@ -126,23 +213,6 @@ The simulator does not rely on a separate terrestrial-versus-aerial mode switch.
 \label{fig:propagation-calculation-flow}
 \end{figure}
 
-\begin{table}[H]
-\centering
-\caption{Mapping of propagation-model calculations to simulator outputs}
-\small
-\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.8cm}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}p{4.0cm}}
-\toprule
-Stage & Operation in the simulator & Output used later\\
-\midrule
-Geometry & Use UE/gNB positions and heights to compute 2D/3D distances and select the low-height UMa or UMa-AV height regime. & Link distance and height regime\\
-LOS state & Evaluate the LOS probability, then sample or reuse the cached Bernoulli LOS/NLOS state for each UE--gNB link. & \texttt{los\_probability}, \texttt{los\_state}\\
-Path loss & Apply the UMa or UMa-AV formula according to distance, height, carrier frequency, and LOS/NLOS state. & \texttt{pathloss}\\
-Shadow fading & Draw clipped Gaussian shadow fading, keep it in the link cache, and refresh it after 25 m of accumulated UE movement. & \texttt{shadow\_fading}\\
-RSRP and SINR & Apply the link budget, map total received power to RSRP, add first-tier interference and thermal noise, and compute SINR. & RSRP, SINR, and neighbor-cell RSRP fields\\
-\bottomrule
-\end{tabularx}
-\label{tab:propagation-implementation-mapping}
-\end{table}
 
 This flow is applied to candidate serving cells and to the first-tier interfering cells used in the SINR calculation. For each UE--gNB link, the sampled LOS/NLOS state and the current shadow-fading value are stored in a per-link cache. The shadow-fading value is reused while the UE movement accumulated for that link remains below 25 m, and a new value is sampled after the update distance is reached. This keeps the large-scale fading variation spatially smoother than an independently sampled value at every time step.
 
@@ -157,28 +227,40 @@ The SINR calculation uses the serving-link received power as the desired signal.
 
 \subsubsection{Handover Decision and Output}
 
-The radio simulator uses an RSRP-based serving-cell rule. At initialization, the strongest candidate cell is selected as the serving gNB. After that, the current serving cell is kept unless a candidate cell exceeds the current serving-cell RSRP by the configured handover margin. Candidate \(c\) replaces serving cell \(s\) only when
+In 3GPP RRC measurement reporting, Event A3 is used when a neighbouring cell
+becomes better than the serving cell by a configured offset, so it provides a
+measurement-level condition for identifying candidate serving-cell changes
+\cite{3gpp_38331}. The radio simulator applies this idea as an RSRP-based
+serving-cell rule. At initialization, the strongest candidate cell is selected
+as the serving gNB. After that, the current serving cell is kept unless a
+candidate cell exceeds the current serving-cell RSRP by the configured handover
+margin. In the implemented radio trace generator, candidate \(c\) replaces
+serving cell \(s\) only when
 
 \begin{equation}
-\mathrm{RSRP}_{c}>\mathrm{RSRP}_{s}+3~\mathrm{dB}.
+\mathrm{RSRP}_{c}>\mathrm{RSRP}_{s}+M_{\mathrm{HO}},
+\qquad M_{\mathrm{HO}}=3~\mathrm{dB}.
 \end{equation}
 
-There is no time-to-trigger, hysteresis timer, or SINR threshold in this radio-level serving-cell rule. Therefore, a recorded handover flag in the radio dataset should be interpreted as a serving-cell index transition suggested by the measurement model, not as a completed 5G protocol handover. This distinction is important because the radio simulator produces measurement traces and serving-cell events, while the protocol-level handover timing and execution behavior are studied separately in the handover-emulation subsystem. The exported dataset records UE position, height, direction, LOS probability, LOS/NLOS state, path loss, shadow fading, RSRP, received power, SINR, speed, serving gNB index, handover flag, and six neighbor-cell RSRP measurements. These fields are later used to inspect how UE movement and altitude affect the radio conditions around serving-cell changes.
+Thus, the recorded handover flag marks the simulation step where the exported
+serving-cell index changes according to this A3-like RSRP condition. The Python
+radio simulator does not apply time-to-trigger, measurement filtering, or A5
+threshold checks. A5-style threshold conditions are considered in the
+CHO-capable StormSIM workflow when the measurement trace is replayed for
+protocol-level handover evaluation.
+
+The exported dataset records UE position, height, direction, LOS probability,
+LOS/NLOS state, path loss, shadow fading, RSRP, received power, SINR, speed,
+serving gNB index, handover flag, and six neighbor-cell RSRP measurements. These
+fields are later used to inspect how UE movement and altitude affect the radio
+conditions around serving-cell changes.
 
 \subsection{UE Mobility Model}
 \label{sec:ue-mobility-model}
-\textcolor{red}{ADD 2 MODEL, RANDOM WALK AND MANHATTAN}
 
 This section describes the UE mobility model used by the radio simulator. Two mobility concepts are discussed: Random Walk and Manhattan mobility. Random Walk is included as a reference model because it is a common baseline for random movement, while Manhattan mobility is the model actually used in the implemented simulation scenario. This distinction is important because the thesis studies urban-style movement where UE trajectories are constrained by road geometry rather than freely changing direction in an open plane.
 
-The Random Walk model is an unconstrained mobility model in which the UE changes its movement direction randomly over time \cite{bai2003}. At each movement update, the UE selects a direction and travels for a given time interval according to its speed. If the selected direction at step \(k\) is represented by \(\theta_k\), a simple two-dimensional Random Walk update can be written as
-
-\begin{align}
-    x_{k+1} &= x_k + v\Delta t\cos\theta_k,\\
-    y_{k+1} &= y_k + v\Delta t\sin\theta_k.
-\end{align}
-
-Because the next direction is not restricted by a road structure, the resulting trajectory may turn freely within the simulation area. This makes Random Walk simple and useful as a conceptual baseline, but it is less suitable for representing urban vehicle-like movement along streets.
+The Random Walk model is an unconstrained mobility model in which the UE changes its movement direction randomly over time \cite{bai2003}. It is introduced only as a reference mobility concept because it allows free movement in a two-dimensional plane without road constraints. Since the implemented scenario represents urban-style movement, the simulator uses the Manhattan mobility model instead.
 
 \begin{figure}[H]
 \centering
@@ -209,8 +291,6 @@ Because the next direction is not restricted by a road structure, the resulting 
 \caption{Example of UE movement in the Random Walk mobility model}
 \label{fig:random-walk-mobility}
 \end{figure}
-
-In this thesis, the Random Walk model is introduced only as a reference mobility model. It is not used as the main movement model because it does not represent lane-like or street-grid constraints. The implemented UE movement follows the Manhattan mobility model, which is more appropriate for studying radio measurements in a structured urban deployment.
 
 The Manhattan mobility model is a geographic-restriction mobility model designed to represent movement on an urban street grid \cite{bai2003}. The service area is divided into horizontal and vertical road segments that form an orthogonal grid. A UE moves only along these road segments and may travel in one of four directions: East, North, West, or South. Direction changes are permitted at intersections, where the UE may continue forward or select another valid road while remaining inside the service area.
 
@@ -284,21 +364,115 @@ This mobility model is especially relevant to the radio-measurement objective of
 
 \textcolor{red}{Contents: i) 3gpp handover procedure (figures and description); ii) implementation in StormSIM; iii) evaluation metrics of HO performance: pingpong, radio failure.... - detail descprition }
 
+StormSIM is used to execute the protocol-level part of the handover study. In
+the preceding radio simulator, a serving-cell change only indicates that the
+radio measurements prefer another gNB. In StormSIM, the same change is replayed
+as a handover opportunity so that signaling, timers, transport impairment, and
+completion delay can be observed. This separation follows the NG-RAN mobility
+view in which handover includes target preparation, UE reconfiguration or
+execution, path switching, and completion or failure handling, not only radio
+target selection \cite{3gpp_38300,3gpp_38331,3gpp_38413}.
 
-StormSim communicates with the free5GC AMF through SCTP/NGAP on N2 and supports GTP-U on N3. Loss is temporarily disabled while the UE registers and establishes a PDU session, then restored for the handover experiment.
+Figure~\ref{fig:stormsim-handover-flow} summarizes the implemented
+measurement-driven handover flow. Before the handover experiment starts,
+StormSIM connects to the 5G Core, registers the UE, and establishes a PDU
+session. Packet loss is temporarily disabled during this preparation phase so
+that registration and session establishment do not dominate the handover
+results. After the UE is ready, the configured packet loss, latency, and jitter
+values are restored and applied to the virtual radio link and Xn path.
 
-Measurement mode reads \texttt{Step}, \texttt{connected\_gnb}, \texttt{gnbX\_rsrp}, and optional \texttt{Type}. A normal trigger occurs when \texttt{connected\_gnb} changes. The handover monitor follows
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.75cm and 0.6cm, font=\small]
+    \node[box, text width=2.55cm] (trace) {Measurement trace\\RSRP and\\serving gNB};
+    \node[box, text width=2.45cm, right=of trace] (trigger) {HO trigger\\or CHO\\condition};
+    \node[box, text width=2.5cm, right=of trigger] (prep) {Target\\preparation};
+    \node[box, text width=2.55cm, below=of prep] (exec) {UE execution\\and T304};
+    \node[box, text width=2.55cm, left=of exec] (switch) {Path switch\\and context\\cleanup};
+    \node[box, text width=2.55cm, left=of switch] (logs) {Timer, phase,\\and trial logs};
+
+    \draw[arrow] (trace) -- (trigger);
+    \draw[arrow] (trigger) -- (prep);
+    \draw[arrow] (prep) -- (exec);
+    \draw[arrow] (exec) -- (switch);
+    \draw[arrow] (switch) -- (logs);
+\end{tikzpicture}
+\caption{Measurement-driven handover procedure implemented in StormSIM}
+\label{fig:stormsim-handover-flow}
+\end{figure}
+
+\subsubsection{Measurement-Driven Trigger}
+
+The measurement input used by StormSIM contains \texttt{Step},
+\texttt{connected\_gnb}, neighbor-cell RSRP columns named
+\texttt{gnbX\_rsrp}, and an optional \texttt{Type} field. The initial serving
+gNB is selected from the strongest RSRP value in the first measurement row. In
+normal measurement mode, StormSIM does not recompute the target cell from RSRP.
+Instead, it treats a change in \texttt{connected\_gnb} between two consecutive
+rows as the handover trigger. The previous serving gNB becomes the source, the
+new \texttt{connected\_gnb} becomes the target, and the \texttt{Type} field
+selects Xn or N2 handover. If the field is missing, Xn handover is used.
+
+This design makes StormSIM a protocol emulator for an already generated
+measurement trace. The RSRP values remain useful as radio context and, in CHO
+mode, as the input used to build RRC-style measurement reports. In this mode,
+StormSIM smooths RSRP using a nearest-three-step window, updates the UE
+measurement store, and sends a \texttt{MeasurementReport} from the UE to the
+source gNB. The CHO policy then evaluates A3 and A5 conditions. A3 is satisfied
+when a neighbor is better than the serving cell by the configured offset and
+hysteresis, while A5 is satisfied when the serving cell is below a threshold and
+the neighbor is above a threshold \cite{3gpp_38331}. The implemented default
+CHO parameters are a 5 dB A3 offset, 0 dB hysteresis, and -100 dBm serving and
+neighbor thresholds for A5.
+
+\subsubsection{Xn, N2, and CHO Execution}
+
+For Xn handover, the source gNB creates a target-side virtual radio connection,
+starts \texttt{TXnRELOCprep} and \texttt{TXnRELOCoverall}, and forwards the UE
+context to the target gNB. The context-forwarding message is retried up to
+three times with a short delay between attempts. If the forwarding step fails,
+StormSIM records a transport-failure event and the handover attempt is later
+reported as failed. If the target preparation succeeds, the source sends a
+handover command to the UE. The UE starts T304, executes the target connection,
+switches its serving gNB when the execution succeeds, and stops T304. After the
+target gNB obtains the UE context, it performs path switching toward the core
+network; the source-side Xn relocation timers are stopped when the successful
+execution and path-switch stages are observed.
+
+For N2 handover, the source gNB sends an NGAP \texttt{HandoverRequired}
+message toward the AMF and starts \texttt{TNGRELOCprep} and
+\texttt{TNGRELOCoverall}. The target preparation, handover command, and path
+switch are then handled through the NGAP procedure between the gNBs and the
+5G Core \cite{3gpp_38413}. In the thesis workflow, the \texttt{Type} field in
+the measurement trace selects whether the triggered attempt follows the Xn or
+N2 branch.
+
+StormSIM also includes a CHO-capable execution path. In this path, the source
+gNB prepares candidate target gNBs and sends a \texttt{CHOConfig} to the UE.
+The UE evaluates the stored candidate conditions every 500 ms using the latest
+RSRP values. When the condition is satisfied, the UE triggers execution toward
+the selected candidate. This is different from normal measurement mode: normal
+mode replays serving-cell changes that already exist in the trace, while CHO
+mode uses measurement reports and candidate conditions before executing the
+handover.
+
+\subsubsection{Timer and Monitor Output}
+
+The handover monitor records the high-level procedure state as
 
 \begin{equation}
 \mathrm{NULL}\rightarrow\mathrm{PREPARE}\rightarrow\mathrm{EXECUTE}
 \rightarrow\mathrm{COMPLETE}\rightarrow\{\mathrm{SUCCESS},\mathrm{FAIL}\}.
 \end{equation}
 
-YAML parameters independently configure packet loss, one-way latency, and jitter for radio and Xn paths.
+The implemented timer configuration used by the current StormSIM source is
+listed in Table~\ref{tab:stormsim-handover-timers}. These timers are used to
+separate preparation failure, execution failure, recovery behavior, and overall
+procedure completion.
 
 \begin{table}[H]
 \centering
-\caption{Implemented handover timers}
+\caption{Implemented handover timers in StormSIM}
 \begin{tabular}{lrlr}
 \toprule
 Timer & Value & Timer & Value\\
@@ -310,21 +484,47 @@ T311 & 3 s & T301 & 2 s\\
 T312 & 500 ms & T430 & 30 s\\
 \bottomrule
 \end{tabular}
+\label{tab:stormsim-handover-timers}
 \end{table}
 
-The test plan states T304 = 100 ms, but executable source defines 1000 ms.
+The timer values in Table~\ref{tab:stormsim-handover-timers} are the default values used by the current StormSIM source, not parameters read from the YAML scenario file. Most of them are hard-coded as timer constants in the timer package. T304 is defined as a 1000 ms default variable and is changed only if the measurement scenario explicitly overrides the \texttt{T304DurationMs} field at startup.
 
-\textbf{TODO: cần xác nhận từ người dùng.} Confirm the official T304 value.
-
-In addition, the current Xn trigger explicitly assigns the new virtual radio connection a downlink execution delay equal to T304 plus 500 ms. This setting is intended to exercise T304 failure behavior. It does not match archived successful timer records that stop T304 after only tens of milliseconds.
-
-\textbf{TODO: cần xác nhận từ người dùng.} Identify the exact source revision and command used for each official archived result.
-
-
+StormSIM exports three main handover-related outputs. The
+\texttt{timer-events-*.csv} file stores timer start, stop, timeout, cancel,
+restart, and transport-failure events. The
+\texttt{handover-trial-summary-*.csv} file stores one row per handover attempt,
+including trial identifier, source gNB, target gNB, handover type, final
+result, failure reason, and total handover time. The \texttt{ho-time-log.csv}
+file stores timestamps for the monitor phases and is used to inspect the order
+of preparation, execution, and completion events.
 
 \subsubsection{Evaluation Metrics}
 
-The authoritative trial output records source, target, handover type, result, failure reason, and total procedure time. The metrics are success rate, failure rate, and successful-trial mean, median, and 95th-percentile delay. The log column named \texttt{pdr} currently stores \texttt{PacketLoss}; it is interpreted as loss probability in this report.
+The primary metrics are handover success rate, failure rate, and handover
+completion time. For \(N_{\mathrm{HO}}\) attempted handovers and
+\(N_{\mathrm{succ}}\) successful handovers, the success rate is
+
+\begin{equation}
+R_{\mathrm{succ}}=\frac{N_{\mathrm{succ}}}{N_{\mathrm{HO}}}\times100\%.
+\end{equation}
+
+For successful attempts, the delay is measured from the moment StormSIM starts
+the handover procedure to the moment the target gNB reports successful
+completion. The reported delay statistics include mean, median, and
+95th-percentile delay. Failed attempts are analyzed using the failure reason
+and timer events, such as Xn transport failure, preparation timeout, T304
+timeout, or recovery-timer behavior.
+
+Two additional mobility-quality indicators can be derived from the same logs.
+A ping-pong handover is counted when the UE moves from gNB \(A\) to gNB \(B\)
+and then returns to \(A\) within a short observation window. This metric is
+important because frequent back-and-forth handovers indicate unstable target
+selection near cell boundaries. Radio-link-failure-related behavior is
+identified from T310, T311, T301, and T312 timer events and from failed trials
+that do not complete before the configured timeout. In the exported logs, the
+column named \texttt{pdr} is populated from the configured packet-loss value;
+therefore, it is interpreted in this thesis as loss probability rather than as
+packet delivery ratio.
 
 \subsection{Chapter Conclusion}
 

@@ -5,7 +5,7 @@
 
 The first objective is to evaluate the effect of UE/UAV altitude on the generated radio measurements. A higher aerial UE may have a higher probability of LOS connection to several gNBs, which can improve the serving-link received power but can also increase interference from neighboring cells. Therefore, altitude is expected to affect RSRP and SINR in different ways.
 
-The second objective is to evaluate mobility and handover behavior. The simulator records the serving BS, neighboring-cell RSRP values, UE velocity, and handover indicators. These outputs make it possible to identify when the serving BS changes, where handover events occur along the trajectory, and whether the number of handovers changes across altitude ranges.
+The second objective is to evaluate mobility and handover behavior. The simulator records the serving BS, neighboring-cell RSRP values, UE speed setting, and handover indicators. These outputs make it possible to identify when the serving BS changes, where handover events occur along the trajectory, and whether the number of handovers changes across altitude ranges.
 
 The third objective is to evaluate protocol-level handover delay under selected delay and loss settings. This part uses handover-emulation logs to measure completion time, timeout behavior, and failure cases. The purpose is not to merge radio measurement and protocol delay into one metric, but to compare the radio-level trigger behavior with the protocol-level execution behavior.
 
@@ -67,45 +67,112 @@ Control item & Value & Role in the experiment\\
 \midrule
 UE height & Ranges H0--H3 & Main variable in altitude scenarios\\
 Mobility model & Manhattan mobility & UE moves along an urban road grid\\
-UE speed & Height-dependent random range & Randomly assigned according to the configured UE-height range\\
-Simulation duration & 1500 steps (300 s) & 0.2-second output interval\\
-Number of UEs & 1 for trace plots; multiple UEs for aggregate runs & Controls whether the result is trajectory-level or aggregate-level\\
-Repetitions & 30 runs per scenario & Reduces randomness from mobility, LOS/NLOS sampling, and shadow fading\\
+UE speed & Fixed within each trace & Selected from the configured height-dependent range before each run\\
+Simulation duration & 301 samples per trace & Output steps indexed from 0 to 300 in the generated CSV files\\
+Number of UEs & 1 in the radio-measurement traces & Provides one trajectory per generated CSV file\\
+Repetitions & 51--52 traces per altitude range & Reduces randomness from mobility, LOS/NLOS sampling, and shadow fading\\
 \bottomrule
 \end{tabularx}
 \label{tab:a2g-simulation-settings}
 \end{table}
 
-For statistically meaningful comparison, each scenario should be repeated with different random seeds or independently generated UE trajectories. In this thesis, 30 repetitions per scenario are planned as the default setting. If execution time is limited, at least 10 repetitions can be used for preliminary analysis, but final comparison should report the number of repetitions explicitly.
+For statistically meaningful comparison, each altitude range is evaluated using independently generated UE trajectories. The available radio-measurement dataset contains 52 traces for H0 and 51 traces for each of H1, H2, and H3. These repetitions reduce the effect of random mobility, LOS/NLOS sampling, and shadow fading on the reported altitude comparison.
 
 \subsubsection{Evaluation Metrics}
 
-The radio-level metrics are extracted from the simulator CSV output. RSRP is used to evaluate serving-cell and neighboring-cell signal strength. SINR is used to evaluate link quality under interference and thermal noise. Shadow fading is used to observe slow large-scale signal variation. UE velocity is used to interpret how fast the radio condition changes along the trajectory. The serving BS index and handover flag are used to identify cell changes and handover events.
+The radio-level metrics are extracted from the simulator CSV output. RSRP is used to evaluate serving-cell and neighboring-cell signal strength. SINR is used to evaluate link quality under interference and thermal noise. Shadow fading is used to observe slow large-scale signal variation around the median path loss. UE speed is treated as a fixed input within each generated trace rather than as a plotted result metric. The serving BS index and handover flag are used to identify cell changes and handover events.
 
-For each scenario, the evaluation includes both time-series and scenario-level statistics. Time-series plots show how RSRP, SINR, shadow fading, speed, and serving BS evolve along one representative UE trajectory. Scenario-level plots compare the distribution or average value of RSRP, SINR, and number of handovers across altitude ranges or delay settings. The handover-related metrics include the number of handovers, handover event time, source and target BS, success rate, failure rate, and successful-trial handover delay when protocol-level logs are available.
+For each scenario, the evaluation includes both time-series and scenario-level statistics. Time-series plots show how RSRP, SINR, and shadow fading evolve along representative UE trajectories. Scenario-level plots compare the distribution and average value of RSRP and SINR across altitude ranges. Handover-related metrics are analyzed separately using serving-cell changes and protocol-level logs when available.
 
 \subsection{Radio Measurement Results}
+phân tích các chỉ số tín hiệu mà simulator xuất ra:
 
-This subsection reports the radio measurements generated by the simulator. The main plotted metrics are RSRP, SINR, shadow fading, and UE velocity. These metrics are analyzed together because they describe different parts of the same radio condition. RSRP mainly represents the received strength of the serving or neighboring cell, SINR represents the useful-signal quality after interference and noise are considered, shadow fading represents slow random variation around the median path loss, and velocity explains how quickly the UE moves through changing radio conditions.
+- RSRP
+- SINR
+- shadow fading
+- velocity
 
-The result presentation should include the following figures after the official simulation runs are generated:
+có các biểu đồ:
 
-\begin{itemize}
-    \item RSRP over time for representative altitude ranges;
-    \item SINR over time for representative altitude ranges;
-    \item shadow fading over time for the serving link;
-    \item UE velocity over time;
-    \item RSRP comparison across altitude ranges;
-    \item SINR comparison across altitude ranges.
-\end{itemize}
+- RSRP over time
+- SINR over time
+- Shadow fading over time
+- RSRP/SINR comparison between scenarios
 
-When the UE moves farther from the serving gNB, the received signal strength generally decreases, which leads to a lower RSRP. However, RSRP is not determined only by distance. The LOS/NLOS state and shadow fading can also change the received power, so the RSRP curve may fluctuate even when the UE trajectory is smooth.
+phân tích kiểu:
 
-SINR can vary differently from RSRP because it depends on the serving-cell received power, neighboring-cell interference, and thermal noise. In aerial scenarios, a higher UE altitude may increase LOS visibility to the serving gNB, but it may also increase visibility to neighboring gNBs. Therefore, an altitude range with stronger RSRP does not always produce better SINR. Near cell-edge regions, or when several neighboring gNBs are received strongly, SINR may decrease even if the serving-cell RSRP remains acceptable.
+Khi UE/UAV di chuyển xa serving BS, RSRP giảm. Khi interference tăng hoặc UE gần biên cell, SINR giảm. Shadow fading làm tín hiệu dao động ngay cả khi khoảng cách thay đổi không quá lớn
 
-Shadow fading explains slow signal variation caused by environmental obstruction and large-scale propagation randomness. In the simulator, the shadow-fading value is cached per UE--gNB link and updated after a movement distance threshold. As a result, shadow fading changes more slowly than instantaneous geometry-based received power and can create signal fluctuation even when the UE movement does not change abruptly.
+This subsection analyzes the radio-measurement traces generated by the simulator for the four altitude ranges defined in Table~\ref{tab:altitude-ranges-a2g}. The analysis uses the CSV files stored in the four height-range folders. The available dataset contains 52 traces for H0 and 51 traces for each of H1, H2, and H3. Each trace contains 301 time samples for one UE trajectory. The metrics used in this subsection are RSRP, SINR, and shadow fading. UE velocity is not analyzed here because each generated trace uses a fixed speed setting, so velocity mainly acts as an input condition rather than a result metric.
 
-Velocity is included to support interpretation of the radio time series. A faster UE moves through serving-cell and neighboring-cell regions more quickly, so RSRP and SINR may change more rapidly and handover opportunities may appear closer together in time. The velocity curve is therefore useful when explaining whether radio-measurement changes are caused by propagation conditions alone or by rapid movement through the cellular layout.
+\begin{figure}[!htbp]
+\centering
+\fbox{\parbox{0.82\textwidth}{\centering\vspace{2.2cm}
+Simulator screenshot placeholder. Replace this box with a screenshot of the running radio simulator.\vspace{2.2cm}}}
+\caption{Snapshot of the radio simulator during an A2G mobility scenario}
+\label{fig:radio-simulator-screenshot}
+\end{figure}
+
+Table~\ref{tab:radio-measurement-summary} summarizes the measured values across all CSV samples in each altitude range. The terrestrial ranges H0 and H1 have weaker average serving-cell RSRP than the aerial ranges. The mean RSRP improves from -85.46 dBm in H0 and -78.95 dBm in H1 to -68.34 dBm in H2. This follows the expected A2G trend: when the UE height increases, the link has a higher chance of favorable propagation and the serving gNB can often be received with higher power.
+
+\begin{table}[!htbp]
+\centering
+\caption{Summary of radio-measurement results across altitude ranges}
+\small
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{p{1.1cm}p{2.2cm}rrrrr}
+\toprule
+Range & Height interval & Traces & Samples & RSRP (dBm) & SINR (dB) & Shadow fading (dB)\\
+\midrule
+H0 & 1.5--13 m & 52 & 15652 & -85.46 \(\pm\) 10.92 & 14.59 \(\pm\) 11.76 & -1.83 \(\pm\) 5.26\\
+H1 & 13--22.5 m & 51 & 15351 & -78.95 \(\pm\) 9.71 & 11.66 \(\pm\) 9.78 & -1.78 \(\pm\) 5.21\\
+H2 & 22.5--100 m & 51 & 15351 & -68.34 \(\pm\) 5.03 & 2.64 \(\pm\) 5.47 & -0.92 \(\pm\) 3.28\\
+H3 & 100--300 m & 51 & 15351 & -69.92 \(\pm\) 3.32 & 0.31 \(\pm\) 3.56 & -0.12 \(\pm\) 1.45\\
+\bottomrule
+\end{tabular}
+\renewcommand{\arraystretch}{1.0}
+\label{tab:radio-measurement-summary}
+\end{table}
+
+Figure~\ref{fig:radio-rsrp-sinr-timeseries} shows representative RSRP and SINR time series. The representative trace for each altitude range is selected as the trace whose mean RSRP is closest to the median trace-level RSRP of that range. In the RSRP curves, local decreases appear when the UE moves farther from the currently serving gNB or enters a less favorable propagation condition. RSRP may recover after the serving-cell selection changes to a stronger gNB. Therefore, the RSRP curve reflects both geometric movement and serving-cell changes.
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.9\textwidth]{Images/radio_rsrp_sinr_timeseries.png}
+\caption{Representative RSRP and SINR time series across altitude ranges}
+\label{fig:radio-rsrp-sinr-timeseries}
+\end{figure}
+
+The SINR curves show a different trend from RSRP. Although H2 and H3 have stronger average RSRP than H0 and H1, their average SINR is much lower. In Table~\ref{tab:radio-measurement-summary}, the mean SINR decreases from 14.59 dB in H0 and 11.66 dB in H1 to 2.64 dB in H2 and 0.31 dB in H3. This means that stronger received power at higher altitude does not automatically imply better link quality. At aerial heights, the UE can observe stronger signals not only from the serving gNB but also from neighboring gNBs. The increased neighboring-cell visibility raises the interference level, so SINR can decrease even when serving-cell RSRP remains high. This behavior is especially visible near cell-edge regions, where the serving and neighboring gNB powers become comparable.
+
+Figure~\ref{fig:radio-shadow-fading-timeseries} shows the shadow-fading value of the serving link for representative traces. Shadow fading creates slow fluctuations around the median path loss and can change the received power even when the UE movement is smooth. The fluctuation range is larger in H0 and H1 than in H2 and H3. This is also reflected in Table~\ref{tab:radio-measurement-summary}, where the shadow-fading standard deviation is about 5.26 dB in H0 and 5.21 dB in H1, but decreases to 3.28 dB in H2 and 1.45 dB in H3. The high-altitude range therefore produces a more stable shadow-fading component in the generated traces.
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.9\textwidth]{Images/radio_shadow_fading_timeseries.png}
+\caption{Representative shadow-fading time series across altitude ranges}
+\label{fig:radio-shadow-fading-timeseries}
+\end{figure}
+
+The distribution-level comparison in Figure~\ref{fig:radio-altitude-boxplots} confirms the same tendency across all traces instead of only one representative trajectory. The RSRP distribution shifts upward from the terrestrial ranges to the aerial ranges, while the SINR distribution shifts downward. The shadow-fading distribution also becomes narrower as the UE height increases, especially in H3. This confirms that altitude changes the balance between serving-link strength and interference: aerial UEs can obtain stronger received power, but they also experience stronger co-channel interference from neighboring gNBs.
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.95\textwidth]{Images/radio_altitude_metric_boxplots.png}
+\caption{Distribution of RSRP, SINR, and shadow fading across altitude ranges}
+\label{fig:radio-altitude-boxplots}
+\end{figure}
+
+Figure~\ref{fig:radio-rsrp-sinr-mean-comparison} summarizes the mean RSRP and SINR values with standard-deviation bars. The result highlights the main radio-measurement conclusion of this subsection: increasing altitude improves the average serving-cell RSRP up to the low-to-medium aerial range, but it does not improve SINR. The SINR reduction in H2 and H3 indicates that interference becomes the dominant limiting factor for aerial UE links in the simulated hexagonal deployment. Consequently, RSRP and SINR must be interpreted together when evaluating A2G mobility. A handover decision based only on received power may identify a strong serving cell, but the resulting link quality can still be limited if several neighboring gNBs are also received strongly.
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.82\textwidth]{Images/radio_rsrp_sinr_mean_comparison.png}
+\caption{Mean RSRP and SINR comparison across altitude ranges}
+\label{fig:radio-rsrp-sinr-mean-comparison}
+\end{figure}
+
+Overall, the radio-measurement results are consistent with the modelling objective of the simulator. RSRP mainly follows serving-link received power and improves when the UE has more favorable A2G propagation. SINR depends on both serving power and neighboring-cell interference, so it can degrade at higher altitude. Shadow fading introduces slow signal variation and explains why the measured radio curves are not smooth functions of distance alone.
 
 \subsection{Handover Behavior Analysis}
 
@@ -118,89 +185,109 @@ The handover behavior should be evaluated using the following outputs:
     \item handover event timeline;
     \item number of handovers per altitude range;
     \item source and target BS for each handover event;
-    \item UE position and speed at each handover event;
     \item comparison between handover count and altitude range.
 \end{itemize}
 
-Handover events are expected to occur mainly when the UE moves toward the boundary between two cells. In this region, the RSRP of a neighboring gNB may become higher than the RSRP of the current serving gNB by more than the configured handover margin. A higher speed can make these transitions occur over fewer simulation steps, while a higher altitude can change the number of visible candidate gNBs and the interference condition. Therefore, the handover analysis should be interpreted together with the RSRP, SINR, and velocity plots rather than from the handover count alone.
+Handover events are expected to occur mainly when the UE moves toward the boundary between two cells. In this region, the RSRP of a neighboring gNB may become higher than the RSRP of the current serving gNB by more than the configured handover margin. A higher speed can make these transitions occur over fewer simulation steps, while a higher altitude can change the number of visible candidate gNBs and the interference condition. Therefore, the handover analysis should be interpreted together with the RSRP and SINR plots rather than from the handover count alone.
 
 For protocol-level delay analysis, the handover-emulation results are evaluated separately using trial-summary and timer-event logs. The main metrics are success rate, failure rate, timeout cases, mean successful handover delay, median successful handover delay, and 95th-percentile successful handover delay. This separation preserves the distinction between a radio-level serving-cell change and the completion of the actual handover signaling procedure.
 
-\subsection{Validation Scope}
 
-The handover-delay results in this chapter are obtained from StormSim trial-summary CSV files and timer-event logs generated while StormSim interacts with the free5GC core network. The repository contains many development logs but no single clearly labeled complete factorial experiment. Two large Xn runs with a logged one-way delay parameter of 20 ms are used for the verified comparison. Because the \texttt{pdr} field is populated from \texttt{PacketLoss}, its values are interpreted as loss probabilities.
+\subsection{Measurement-Driven Handover-Delay Experiment}
+
+The protocol-level handover experiment uses a dedicated seven-gNB measurement trace generated from the radio simulator and replayed by StormSim. The trace topology contains one center gNB and the six first-tier neighbouring gNBs of the hexagonal layout. With the simulator hexagon radius \(R=500\) m, the neighbour spacing is \(1.5R=750\) m in the horizontal direction and \(\sqrt{3}R\approx866\) m in the vertical hexagonal direction. The active rectangular region is set to \(1500\) m by \(1500\) m. Under the implemented topology generator, this region and its boundary buffer keep exactly the center cell and the first-tier neighbours, while excluding second-tier gNBs.
+
+The generated CSV file keeps fixed RSRP columns \texttt{gnb0\_rsrp} to \texttt{gnb6\_rsrp}. The index \texttt{gnb0} represents the center gNB, and \texttt{gnb1} to \texttt{gnb6} represent the surrounding cells in angular order. The \texttt{connected\_gnb} field uses the StormSim configuration identifiers \texttt{000000} to \texttt{000006}, so that a serving-cell change in the radio trace can be replayed directly as a measurement-driven Xn handover opportunity. The StormSim configuration still contains \texttt{000007}, but this gNB is not present in the measurement trace and is not selected as a handover target in this experiment.
 
 \begin{table}[H]
 \centering
-\caption{Verified handover summaries}
-\begin{tabular}{lrrrrr}
+\caption{Seven-gNB StormSim measurement-trace settings}
+\small
+\begin{tabularx}{\textwidth}{p{4.0cm}X}
 \toprule
-Run & Loss & Trials & Success & Failure & Rate\\
+Item & Value\\
 \midrule
-1781614531 & 0.10 & 210 & 210 & 0 & 100.00\%\\
-1781622441 & 0.50 & 195 & 171 & 24 & 87.69\%\\
+Measurement file & \texttt{data/stormsim\_7gnb\_measurement.csv}\\
+Generator script & \texttt{generate\_stormsim\_7gnb\_data.py}\\
+Topology & 1 center gNB and 6 first-tier neighbouring gNBs\\
+Simulation rectangle & \(1500\) m \(\times\) \(1500\) m\\
+Hexagon radius & \(500\) m\\
+UE height & \(50\) m, corresponding to the H2 aerial range\\
+Samples & 301 steps, indexed from 0 to 300\\
+Serving-cell rule & RSRP-based selection with 3 dB handover margin\\
+Detected serving-cell changes & 18 handover events\\
+Handover type & Xn handover\\
+Transport impairment & 0 packet loss, 0 ms latency, 0 ms jitter\\
 \bottomrule
-\end{tabular}
+\end{tabularx}
+\label{tab:stormsim-seven-gnb-settings}
 \end{table}
 
-\textbf{TODO:} Confirm that these are official rather than debugging runs.
+The experiment was executed with the following StormSim command:
 
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.82\textwidth]{Images/archived_ho_success_rate.png}
-\caption{Handover success rate reproduced from the two archived trial-summary files}
-\label{fig:archived-ho-success}
-\end{figure}
+\begin{lstlisting}[language=bash,caption={StormSim command for the seven-gNB measurement trace}]
+./bin/emulator -c config/config.yml \
+  --csv-measurement data/stormsim_7gnb_measurement.csv \
+  --step-delay 10
+\end{lstlisting}
 
-Figure~\ref{fig:archived-ho-success} is descriptive rather than a controlled loss-response curve. The runs have different archived trial counts, and the exact source revision is unknown.
+The reduced step delay is used only to replay the 301 measurement samples faster. The handover completion time is taken from StormSim trial summaries and timer logs, not from the CSV sample interval.
 
 \subsection{Handover Success and Delay}
 
-At loss 0.10, all 210 attempts succeeded. At loss 0.50, 171 of 195 succeeded; all 24 failures were labeled \texttt{Timeout}. The matching timer file contains 24 Xn preparation transport failures, 24 preparation timeouts, and 24 overall cancellations, associating these failures with unsuccessful Xn preparation.
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.82\textwidth]{Images/archived_xn_prep_outcomes.png}
-\caption{TXnRELOCprep terminal and diagnostic events in the archived timer files}
-\label{fig:archived-xn-prep}
-\end{figure}
-
-The \texttt{transport\_fail} and \texttt{timeout} bars at loss 0.50 describe the same 24 failed preparation lifecycles at different points: context forwarding first reports a transport failure, while the preparation timer is intentionally left active and later expires. They must not be added as 48 independent failed handovers.
+Table~\ref{tab:stormsim-seven-gnb-summary} summarizes the handover outcomes from the generated trial-summary log. All 18 detected serving-cell changes were executed as Xn handovers and completed successfully. No timeout or failure was recorded in this baseline run.
 
 \begin{table}[H]
 \centering
-\caption{Successful Xn handover delay}
-\begin{tabular}{lrrr}
+\caption{Seven-gNB StormSim handover outcome summary}
+\begin{tabular}{lrrrrr}
 \toprule
-Loss & Mean & Median & 95th percentile\\
+Run & Type & Trials & Success & Failure & Success rate\\
 \midrule
-0.10 & 200.597 ms & 200.574 ms & 201.061 ms\\
-0.50 & 200.627 ms & 200.628 ms & 201.062 ms\\
+1782627345 & Xn & 18 & 18 & 0 & 100.0\%\\
 \bottomrule
 \end{tabular}
+\label{tab:stormsim-seven-gnb-summary}
 \end{table}
 
-Successful durations cluster around 200.6 ms because the scenario polls completion every 200 ms. The value is therefore quantized and is not a precise lower-layer latency measurement.
+The successful handover delay statistics are shown in Table~\ref{tab:stormsim-seven-gnb-delay}. The mean delay is \(200.530\) ms and the median delay is \(200.550\) ms. The minimum and maximum successful completion times are \(200.122\) ms and \(201.013\) ms, respectively.
 
-\begin{figure}[H]
+\begin{table}[H]
 \centering
-\includegraphics[width=0.82\textwidth]{Images/archived_ho_delay_boxplot.png}
-\caption{Distribution of successful handover durations in the archived trial summaries}
-\label{fig:archived-ho-delay}
-\end{figure}
+\caption{Successful Xn handover delay in the seven-gNB StormSim run}
+\begin{tabular}{lrrrrr}
+\toprule
+Type & Mean & Median & Minimum & Maximum & 95th percentile\\
+\midrule
+Xn & 200.530 ms & 200.550 ms & 200.122 ms & 201.013 ms & 201.013 ms\\
+\bottomrule
+\end{tabular}
+\label{tab:stormsim-seven-gnb-delay}
+\end{table}
 
-The narrow boxes in Fig.~\ref{fig:archived-ho-delay} do not demonstrate intrinsically low protocol jitter. They mainly show that the outer scenario observes completion at a 200 ms polling boundary.
+The successful handover delays are tightly clustered around 200 ms. This does not mean that every internal handover phase takes 200 ms. Instead, the scenario waits for handover completion using a 200 ms polling ticker, so the exported trial-summary delay is quantized by the observation loop. This value is therefore suitable for comparing trial-level completion behavior in the implemented emulator, but it should not be interpreted as a precise lower-layer radio execution latency.
 
-\subsection{Timer Consistency and Missing Scenarios}
+\subsection{Timer-Level Observation}
 
-Raw timer coverage is incomplete. Run 1781614531 has 210 successful summaries but only 50 terminal T304 records, including one T304 timeout despite no failed trial. Trial summaries are therefore used as the authoritative overall outcome; T304 timeout rates are not reported.
+The timer-event log provides a finer view of the internal handover procedure. Table~\ref{tab:stormsim-seven-gnb-timers} reports successful terminal timer events from the same run. Each of the 18 Xn handover attempts produced matching start and stop records for \texttt{TXnRELOCprep}, \texttt{TXnRELOCoverall}, and \texttt{T304}. No timeout event was recorded.
 
-The source supports several planned experiment outputs: loss--delay evaluation, a T304 breakpoint search, an RLF cascade, an Xn/N2 comparison, and beam-failure analysis. However, the repository does not contain a clearly labeled complete result set for all scenarios. RLF, beam, and N2 RTT fields are generally empty or zero.
+\begin{table}[H]
+\centering
+\caption{Successful timer events in the seven-gNB StormSim run}
+\begin{tabular}{lrrrr}
+\toprule
+Timer & Count & Mean & Median & Range\\
+\midrule
+\texttt{TXnRELOCprep} & 18 & 0.389 ms & 0.370 ms & 0.220--0.600 ms\\
+\texttt{TXnRELOCoverall} & 18 & 0.376 ms & 0.345 ms & 0.200--0.620 ms\\
+\texttt{T304} & 18 & 10.621 ms & 10.765 ms & 10.070--10.960 ms\\
+\bottomrule
+\end{tabular}
+\label{tab:stormsim-seven-gnb-timers}
+\end{table}
 
-There is also evidence that the archived logs were not generated by the exact current source state. The current Xn trigger sets the handover connection delay to T304 plus 500 ms, which should deliberately exceed T304, whereas archived successful records show T304 stopping after tens of milliseconds. The archived statistics are valid descriptions of those CSV files, but they cannot yet be claimed as reproducible results of the current executable revision.
-
-\textbf{TODO:} Identify the archived source revision, then repeat the official timer campaign after fixing T304 and timer lifecycle coverage.
+The timer-level data shows that internal successful timer stops occur much earlier than the 200 ms trial-summary delay. In particular, \texttt{T304} stops after about 10.6 ms on average, while the Xn relocation preparation and overall timers stop within about 1 ms. The difference between these timer values and the trial-summary delay is caused by the scenario-level success polling interval. This confirms that the timer-event log and the trial-summary log should be interpreted at different granularities: timer events describe internal procedure phases, while trial summaries describe when the scenario observes the completed handover.
 
 \subsection{Chapter Conclusion}
 
-This chapter defined the experimental scenario groups for radio-measurement and handover-delay analysis. The altitude design follows the height regimes used by the UMa and UMa-AV propagation models, so the A2G experiments can compare terrestrial, transition, low-to-medium aerial, and high-aerial UE behavior. The chapter also described the planned radio-measurement plots and the metrics used to interpret RSRP, SINR, shadow fading, velocity, serving-cell changes, and handover events. The verified archived Xn runs demonstrate measurement-driven handover execution and show reduced success under higher signaling loss, while the delay results reveal polling quantization and timer-telemetry limitations. The next chapter summarizes the thesis, states the main limitations, and outlines future work.
+This chapter defined the experimental scenario groups for radio-measurement and handover-delay analysis. The altitude design follows the height regimes used by the UMa and UMa-AV propagation models, so the A2G experiments can compare terrestrial, transition, low-to-medium aerial, and high-aerial UE behavior. The radio-measurement results show that aerial altitude improves serving-cell RSRP but can reduce SINR because neighbouring-cell interference becomes stronger. The seven-gNB StormSim run then demonstrates the measurement-driven handover workflow: 18 Xn handovers were triggered from the generated trace and all completed successfully in the baseline no-loss condition. The trial-summary delay is clustered around 200 ms because completion is observed by a 200 ms polling loop, while the timer log shows shorter internal timer durations. The next chapter summarizes the thesis, states the main limitations, and outlines future work.

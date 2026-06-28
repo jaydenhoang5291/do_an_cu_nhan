@@ -70,6 +70,7 @@ class CellularNetworkReceivedPower:
 
         # UE
         self.num_ues = int(num_ues)
+        self.show_rsrp_table = self.num_ues == 1
         self.ue_colors = ['green', 'purple', 'orange', 'cyan', 'magenta', 'yellow', 'black']
         self.ue_speed_min_kmh, self.ue_speed_max_kmh = self._speed_range_for_height(self.ue_height_m)
         self.ue_speeds = np.random.uniform(self.ue_speed_min_kmh, self.ue_speed_max_kmh, self.num_ues)
@@ -132,9 +133,14 @@ class CellularNetworkReceivedPower:
             # overlap neighboring panels when Matplotlib scales fonts differently.
             right_x = 0.78
             right_w = 0.19
-            self.height_ax = self.fig.add_axes([right_x, 0.68, right_w, 0.21])
-            self.ue_info_ax = self.fig.add_axes([right_x, 0.42, right_w, 0.15])
-            self.bs_table_ax = self.fig.add_axes([right_x, 0.10, right_w, 0.25])
+            if self.show_rsrp_table:
+                self.height_ax = self.fig.add_axes([right_x, 0.68, right_w, 0.21])
+                self.ue_info_ax = self.fig.add_axes([right_x, 0.42, right_w, 0.15])
+                self.bs_table_ax = self.fig.add_axes([right_x, 0.10, right_w, 0.25])
+            else:
+                self.height_ax = self.fig.add_axes([right_x, 0.10, right_w, 0.79])
+                self.ue_info_ax = None
+                self.bs_table_ax = None
             self.toggle_ax = self.fig.add_axes([0.08, 0.02, 0.12, 0.05])
             self.restart_ax = self.fig.add_axes([0.22, 0.02, 0.14, 0.05])
             self.toggle_button = Button(self.toggle_ax, 'Stop', color='lightcoral')
@@ -245,22 +251,22 @@ class CellularNetworkReceivedPower:
         self.ax.set_ylabel('Distance (m)')
         ue_tag = f"UE h={self.ue_height_m:g}m"
         self.ax.set_title(
-            f"{int(self.width)}m x{int(self.height)}m | Ground BS | {self.num_ues} UEs | {ue_tag} | Spacing: {int(self.grid_spacing_m)}m",
+            f"{int(self.width)}m x{int(self.height)}m | {self.num_ues} UEs | {ue_tag} | Spacing: {int(self.grid_spacing_m)}m",
             fontsize=10,
             pad=28
         )
         self.setup_height_plot()
-        self.update_selected_ue_info()
-        self.update_bs_power_table()
+        if self.show_rsrp_table:
+            self.update_selected_ue_info()
+            self.update_bs_power_table()
         plt.draw()
 
     def setup_height_plot(self):
         self.height_ax.clear()
 
-        ue_heights = [self.get_ue_height_m(i) for i in range(self.num_ues)]
-        max_height = max([self.h_bs, *ue_heights, 50.0])
+        ue_height = self.ue_height_m
+        max_height = max(self.h_bs, ue_height, 50.0)
         y_max = max_height * 1.2
-        x_ues = np.arange(1, self.num_ues + 1)
 
         self.height_ax.axhline(
             self.h_bs,
@@ -269,42 +275,28 @@ class CellularNetworkReceivedPower:
             linewidth=1.5,
             label=f'BS height {self.h_bs:g} m'
         )
-        self.height_ax.vlines(
-            x_ues,
-            0,
-            ue_heights,
-            colors=[self.ue_colors[i % len(self.ue_colors)] for i in range(self.num_ues)],
+        self.height_ax.axhline(
+            ue_height,
+            color='tab:blue',
+            linestyle='-',
             linewidth=2.0,
-            alpha=0.8
+            label=f'UE height {ue_height:g} m'
         )
-        self.height_ax.scatter(
-            x_ues,
-            ue_heights,
-            c=[self.ue_colors[i % len(self.ue_colors)] for i in range(self.num_ues)],
-            s=36,
-            zorder=3,
-            label='UE height'
-        )
+        self.height_ax.text(0.5, ue_height + y_max * 0.025, f'{ue_height:g} m', ha='center', va='bottom', fontsize=8)
 
-        for x, height in zip(x_ues, ue_heights):
-            self.height_ax.text(x, height + y_max * 0.025, f'{height:g} m', ha='center', va='bottom', fontsize=8)
-
-        self.height_ax.set_xlim(0.5, max(1.5, self.num_ues + 0.5))
+        self.height_ax.set_xlim(0.0, 1.0)
         self.height_ax.set_ylim(0, y_max)
         self.height_ax.set_title('UE height above ground', fontsize=8, fontweight='bold', pad=3)
         self.height_ax.set_ylabel('Height (m)', fontsize=8)
-        self.height_ax.set_xlabel('UE index', fontsize=8)
+        self.height_ax.set_xticks([])
         self.height_ax.tick_params(axis='both', labelsize=7)
         self.height_ax.grid(axis='y', linestyle=':', linewidth=0.8, alpha=0.6)
         self.height_ax.legend(loc='upper right', fontsize=8)
 
-        if self.num_ues <= 8:
-            self.height_ax.set_xticks(x_ues)
-            self.height_ax.set_xticklabels([f'UE{i}' for i in range(self.num_ues)], rotation=45, ha='right')
-        else:
-            self.height_ax.set_xticks([])
-
     def update_bs_power_table(self, ue_idx: int = 0, serving_bs=None, serving_rsrp=None, neighbors=None):
+        if not self.show_rsrp_table or self.bs_table_ax is None:
+            return
+
         self.bs_table_ax.clear()
         self.bs_table_ax.axis('off')
         self.bs_table_ax.text(
@@ -382,6 +374,9 @@ class CellularNetworkReceivedPower:
         handover_count=None,
         speed_kmh=None,
     ):
+        if not self.show_rsrp_table or self.ue_info_ax is None:
+            return
+
         self.ue_info_ax.clear()
         self.ue_info_ax.axis('off')
 
@@ -564,7 +559,7 @@ class CellularNetworkReceivedPower:
                 shadow_fading_db=sf_db
             )
 
-            if not self.headless and ue_idx == 0:
+            if not self.headless and self.show_rsrp_table and ue_idx == 0:
                 self.update_selected_ue_info(
                     ue_idx,
                     x,
